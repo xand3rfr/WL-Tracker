@@ -21,6 +21,15 @@ Build a player from scratch: identity, body, position, attributes, badges and an
 
 The first time you open the builder, a short trailer plays. It's skippable, and you can replay it from Settings → Intro Trailer or by opening `/?intro`. It runs live in the game engine: the floodlights come on, a preset star breaks a defender's ankles and throws down a slow-motion dunk, then **Coming Soon** cards tease *The City*, *Pro-Am 5v5* and *Ranked Seasons*, ending on the MyPLAYER reveal.
 
+## Sculpted players
+
+Every player is sculpted from their MyPLAYER build, not modeled by hand:
+
+- **The shape:** the body is described as smoothly blended shapes (shoulders, pecs, lats, biceps, quads, calves and glutes; a jaw, cheekbones, nose, lips, brow and ears; hands with five fingers; sneakers; a jersey and baggy shorts that sit on the body). It's turned into seamless meshes with *surface nets* (`public/js/charmesh.js`, `public/js/charspec.js`).
+- **The skeleton:** meshes are skinned to a real skeleton, so every animation, dribble move and dunk bends the body smoothly.
+- **Your build changes everything:** height, weight, wingspan, body type, skin tone, hair, facial hair and tattoos (drawn with an ink shader) all reshape or recolor the model. Each player also gets a consistent face derived from their name.
+- **Speed:** meshes are generated on Web Workers behind a loading screen and cached per build. The detail level follows **Settings → Graphics**.
+
 ## Look and sound
 
 - The court uses **CC0 photo-scanned materials**: asphalt, concrete, a chain-link fence and metal poles. Players wear mesh-fabric jerseys and the ball is pebbled leather.
@@ -46,7 +55,9 @@ How a game plays:
 - **Shot meter:** hold Shoot, then release in the white window. The window grows with your shooting ratings and badges and shrinks when a defender contests. Near the rim you get a layup or dunk, depending on your height, vertical and dunk ratings.
 - **Ratings drive everything:** speed, steals, blocks, rebounding reach, finishing and passing lanes.
 - **Streetball rules:** clear the ball past the arc after a steal or defensive rebound, a 20-second shot clock, and out of bounds is a turnover.
-- **Box score and grade** at the end.
+- **Instant replays** of dunks, ankle-breakers, blocks and game-winners, in slow motion from a cinematic camera. Press E or F to skip, or turn them off in Settings. Offline only.
+- **Game feel:** hit-stop and camera shake on slams and blocks, slow motion on the game-winner, and a run cycle with hip twist, arm pump and toe-off.
+- **Box score, Player of the Game and grade** at the end, plus **Rep** that ranks you up across games: Rookie, Starter, Pro, All-Star, Superstar, Legend.
 
 | Action | Keyboard | Phone |
 | --- | --- | --- |
