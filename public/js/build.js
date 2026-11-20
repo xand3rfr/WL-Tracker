@@ -237,7 +237,7 @@ export function defaultBuild() {
     identity: { first: 'Marcus', last: 'Reed', nickname: 'Blacktop', number: '0', age: 20, country: 'United States', college: 'Brooklyn, NY' },
     position: 'PG',
     body: { height: 75, weight: 190, wingspan: 79, bodyType: 'Athletic' },
-    look: { skin: SKIN_TONES[5], hair: 'Low Fade', hairColor: 'Black', facialHair: 'Stubble', eyeColor: 'Brown', tattoos: [], jersey: 'Volt', shoes: 'Triple Black' },
+    look: { skin: SKIN_TONES[5], hair: 'Low Fade', hairColor: 'Black', facialHair: 'Stubble', eyeColor: 'Brown', tattoos: [], jersey: 'Red', shoes: 'Triple Black' },
     attrs, badges: {},
     anims: Object.fromEntries(ANIM_KEYS.map(k => [k, ANIMATIONS[k].multi ? [] : ANIMATIONS[k].items[0].id])),
   };
@@ -321,7 +321,7 @@ export function sanitizeBuild(raw) {
       hair: oneOf(raw.look?.hair, HAIR_STYLES, d.look.hair), hairColor: oneOf(raw.look?.hairColor, Object.keys(HAIR_COLORS), 'Black'),
       facialHair: oneOf(raw.look?.facialHair, FACIAL_HAIR, 'None'), eyeColor: oneOf(raw.look?.eyeColor, Object.keys(EYE_COLORS), 'Brown'),
       tattoos: Array.isArray(raw.look?.tattoos) ? raw.look.tattoos.filter(t => TATTOO_SPOTS.includes(t)) : [],
-      jersey: oneOf(raw.look?.jersey, Object.keys(JERSEY_COLORS), 'Volt'), shoes: oneOf(raw.look?.shoes, Object.keys(SHOE_COLORS), 'Triple Black'),
+      jersey: oneOf(raw.look?.jersey, Object.keys(JERSEY_COLORS), 'Red'), shoes: oneOf(raw.look?.shoes, Object.keys(SHOE_COLORS), 'Triple Black'),
     },
     attrs: Object.fromEntries(ATTR_KEYS.map(k => [k, parseInt(raw.attrs?.[k], 10) || ATTR_MIN])),
     badges: Object.fromEntries(Object.entries(raw.badges || {}).filter(([id, t]) => BADGES.some(x => x.id === id) && Number.isInteger(t) && t >= 0 && t <= 4)),

@@ -20,10 +20,10 @@ function courtTexture() {
   for (let i = 0; i < d.length; i += 4) { const n = (Math.random() - 0.5) * 22; d[i] += n; d[i + 1] += n; d[i + 2] += n; }
   ctx.putImageData(img, 0, 0);
   const [x0, z0] = px(-COURT.halfW, 0), [x1, z1] = px(COURT.halfW, COURT.len);
-  ctx.fillStyle = 'rgba(14,30,20,.92)'; ctx.fillRect(x0, z0, x1 - x0, z1 - z0);
+  ctx.fillStyle = 'rgba(22,19,21,.94)'; ctx.fillRect(x0, z0, x1 - x0, z1 - z0);
   // key
   const [kx0, kz0] = px(-2.44, 0), [kx1, kz1] = px(2.44, 5.8);
-  ctx.fillStyle = 'rgba(31,140,20,.55)'; ctx.fillRect(kx0, kz0, kx1 - kx0, kz1 - kz0);
+  ctx.fillStyle = 'rgba(150,14,28,.6)'; ctx.fillRect(kx0, kz0, kx1 - kx0, kz1 - kz0);
   ctx.strokeStyle = '#eef2ee'; ctx.lineWidth = m(0.06); ctx.lineCap = 'butt';
   ctx.strokeRect(x0, z0, x1 - x0, z1 - z0);
   ctx.strokeRect(kx0, kz0, kx1 - kx0, kz1 - kz0);
@@ -35,7 +35,7 @@ function courtTexture() {
   const a0 = Math.atan2(COURT.cornerZ - COURT.rim.z, -COURT.cornerX), a1 = Math.atan2(COURT.cornerZ - COURT.rim.z, COURT.cornerX);
   ctx.arc(rx, rz, m(COURT.threeR), a0, a1, true);
   const [cx1] = px(COURT.cornerX, 0); ctx.lineTo(cx1, cz0);
-  ctx.strokeStyle = '#39ff14'; ctx.lineWidth = m(0.07); ctx.stroke();
+  ctx.strokeStyle = '#e11d2e'; ctx.lineWidth = m(0.07); ctx.stroke();
   ctx.strokeStyle = '#eef2ee'; ctx.lineWidth = m(0.06);
   // free throw circle + restricted arc + half court circle
   const [, ftz] = px(0, 5.8);
@@ -44,7 +44,7 @@ function courtTexture() {
   ctx.beginPath(); ctx.arc(rx, rz, m(1.22), 0, Math.PI); ctx.stroke();
   const [, hz] = px(0, COURT.len);
   ctx.beginPath(); ctx.arc(rx, hz, m(1.83), Math.PI, TAU); ctx.stroke();
-  ctx.fillStyle = 'rgba(57,255,20,.18)'; ctx.beginPath(); ctx.arc(rx, hz, m(1.8), Math.PI, TAU); ctx.fill();
+  ctx.fillStyle = 'rgba(225,29,46,.18)'; ctx.beginPath(); ctx.arc(rx, hz, m(1.8), Math.PI, TAU); ctx.fill();
   // hash marks
   for (const z of [2.13, 2.97, 3.84, 4.7]) for (const sx of [-1, 1]) { const [hx, hz2] = px(sx * 2.44, z); ctx.fillStyle = '#eef2ee'; ctx.fillRect(hx - (sx > 0 ? 0 : m(0.2)), hz2, m(0.2), m(0.06)); }
   // wordmark
@@ -53,7 +53,7 @@ function courtTexture() {
   ctx.translate(lx, lz);
   ctx.font = `italic 900 ${m(0.7)}px "Barlow Condensed", Impact, sans-serif`;
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillStyle = 'rgba(57,255,20,.22)';
+  ctx.fillStyle = 'rgba(225,29,46,.22)';
   ctx.fillText('BLACKTOP LEGENDS', 0, 0);
   ctx.restore();
   return tex(c);
@@ -84,7 +84,7 @@ function windowsTexture(seed) {
   let s = seed;
   const r = () => ((s = (s * 9301 + 49297) % 233280) / 233280);
   for (let y = 8; y < 256; y += 14) for (let x = 6; x < 128; x += 12) {
-    if (r() < 0.35) { ctx.fillStyle = r() < 0.15 ? '#9cff7a' : r() < 0.5 ? '#ffd28a' : '#c9d6ff'; ctx.globalAlpha = 0.5 + r() * 0.5; ctx.fillRect(x, y, 6, 8); }
+    if (r() < 0.35) { ctx.fillStyle = r() < 0.15 ? '#ff8a94' : r() < 0.5 ? '#ffd28a' : '#c9d6ff'; ctx.globalAlpha = 0.5 + r() * 0.5; ctx.fillRect(x, y, 6, 8); }
   }
   ctx.globalAlpha = 1;
   return tex(c);
@@ -102,7 +102,7 @@ function buildCourt(scene) {
   pole.position.set(0, 1.975, -0.7); pole.castShadow = true; scene.add(pole);
   const arm = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, 1.85), dark);
   arm.position.set(0, 3.55, 0.22); arm.castShadow = true; scene.add(arm);
-  const pad = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 1.9, 16), new THREE.MeshStandardMaterial({ color: '#0f5c12', roughness: 0.8 }));
+  const pad = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 1.9, 16), new THREE.MeshStandardMaterial({ color: '#7a0c16', roughness: 0.8 }));
   pad.position.set(0, 0.95, -0.7); scene.add(pad);
   const board = new THREE.Mesh(new THREE.BoxGeometry(1.83, 1.07, 0.03), new THREE.MeshStandardMaterial({ map: boardTexture(), transparent: true, roughness: 0.1, metalness: 0.1 }));
   board.position.set(0, 2.9 + 0.535, COURT.boardZ - 0.015); scene.add(board);
@@ -185,9 +185,14 @@ function locomotion(p, base, hasBall, defense, time) {
 }
 
 export class CourtView {
-  constructor(container, game) {
+  // opts.localId: the player this screen controls; opts.jerseys: [home, away]; opts.camera: 'broadcast' | 'close'
+  constructor(container, game, opts = {}) {
     this.container = container;
     this.game = game;
+    this.localId = opts.localId ?? game.user.id;
+    this.local = game.players[this.localId];
+    this.jerseys = opts.jerseys;
+    this.camMode = opts.camera || 'broadcast';
     const r = this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
     r.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75));
     r.outputColorSpace = THREE.SRGBColorSpace;
@@ -205,7 +210,7 @@ export class CourtView {
     Object.assign(key.shadow.camera, { left: -11, right: 11, top: 12, bottom: -12, near: 1, far: 40 });
     key.shadow.bias = -0.0004;
     scene.add(key);
-    const rimL = new THREE.DirectionalLight(0x39ff14, 0.7); rimL.position.set(-8, 5, -6); scene.add(rimL);
+    const rimL = new THREE.DirectionalLight(0xe11d2e, 0.8); rimL.position.set(-8, 5, -6); scene.add(rimL);
     const fill = new THREE.DirectionalLight(0xaab8ff, 0.5); fill.position.set(-6, 6, 14); scene.add(fill);
 
     this.court = buildCourt(scene);
@@ -224,19 +229,19 @@ export class CourtView {
   }
 
   addPlayer(p) {
-    const g = this.game;
-    const userJersey = g.user.build.look.jersey;
-    const oppJersey = ({ Black: 'White', White: 'Black', Volt: 'Purple', Red: 'Royal', Royal: 'Red', Navy: 'Gold', Purple: 'Volt', Gold: 'Navy', Teal: 'Orange', Orange: 'Teal' })[userJersey] || 'White';
+    const homeJersey = this.jerseys?.[0] || this.local.build.look.jersey;
+    const awayJersey = this.jerseys?.[1] || ({ Black: 'White', White: 'Black', Volt: 'Purple', Red: 'Royal', Royal: 'Red', Navy: 'Gold', Purple: 'Volt', Gold: 'Navy', Teal: 'Orange', Orange: 'Teal' })[homeJersey] || 'White';
     const build = JSON.parse(JSON.stringify(p.build));
-    build.look.jersey = p.team === 0 ? userJersey : oppJersey;
+    build.look.jersey = p.team === 0 ? homeJersey : awayJersey;
     const c = buildCharacter(build, null);
     this.scene.add(c.root);
-    const ringColor = p.isUser ? 0x39ff14 : p.team === 0 ? 0x5ad1ff : 0xff4d5e;
-    const ring = new THREE.Mesh(new THREE.RingGeometry(0.42, 0.5, 32), new THREE.MeshBasicMaterial({ color: ringColor, transparent: true, opacity: p.isUser ? 0.95 : 0.6, depthWrite: false }));
+    const me = p.id === this.localId;
+    const ringColor = me ? 0xe11d2e : p.team === this.local.team ? 0xf2f2f2 : 0x3ab0ff;
+    const ring = new THREE.Mesh(new THREE.RingGeometry(0.42, 0.5, 32), new THREE.MeshBasicMaterial({ color: ringColor, transparent: true, opacity: me ? 0.95 : p.isUser ? 0.85 : 0.5, depthWrite: false }));
     ring.rotation.x = -Math.PI / 2; ring.position.y = 0.012; this.scene.add(ring);
     let arrow = null;
-    if (p.isUser) {
-      arrow = new THREE.Mesh(new THREE.ConeGeometry(0.13, 0.26, 4), new THREE.MeshBasicMaterial({ color: 0x39ff14 }));
+    if (me) {
+      arrow = new THREE.Mesh(new THREE.ConeGeometry(0.13, 0.26, 4), new THREE.MeshBasicMaterial({ color: 0xe11d2e }));
       arrow.rotation.x = Math.PI; this.scene.add(arrow);
     }
     this.chars.set(p.id, { c, ring, arrow, pose: null });
@@ -345,7 +350,8 @@ export class CourtView {
     const dist = clamp((wantW / 2) / Math.tan(hHalf), 9, 22);
     const bx = clamp(bm.position.x, -6, 6), bz = clamp(bm.position.z, 1, 12);
     const follow = narrow ? 0.75 : 0.35;
-    const targetPos = new THREE.Vector3(bx * follow, 3.2 + dist * 0.42, 5.5 + bz * 0.25 + dist * 0.82);
+    const close = this.camMode === 'close' ? 0.72 : 1;
+    const targetPos = new THREE.Vector3(bx * follow, 2.6 + dist * 0.42 * close, 5.5 + bz * 0.3 + dist * 0.82 * close);
     const targetLook = new THREE.Vector3(bx * follow * 0.9, 1.0, 4.4 + bz * 0.3);
     this.camPos.lerp(targetPos, 1 - Math.exp(-dt * 3));
     this.camLook.lerp(targetLook, 1 - Math.exp(-dt * 3));

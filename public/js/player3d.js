@@ -159,7 +159,7 @@ function floorTexture() {
 function backdropTexture() {
   const [c, ctx] = canvas(64, 512);
   const g = ctx.createLinearGradient(0, 0, 0, 512);
-  g.addColorStop(0, '#020302'); g.addColorStop(0.55, '#07110a'); g.addColorStop(0.8, '#0c1f10'); g.addColorStop(1, '#040604');
+  g.addColorStop(0, '#030202'); g.addColorStop(0.55, '#140507'); g.addColorStop(0.8, '#22080c'); g.addColorStop(1, '#050304');
   ctx.fillStyle = g; ctx.fillRect(0, 0, 64, 512);
   return tex(c);
 }
@@ -167,7 +167,7 @@ function backdropTexture() {
 function beamTexture() {
   const [c, ctx] = canvas(64, 256);
   const g = ctx.createLinearGradient(0, 0, 0, 256);
-  g.addColorStop(0, 'rgba(57,255,20,0)'); g.addColorStop(0.5, 'rgba(57,255,20,.35)'); g.addColorStop(1, 'rgba(57,255,20,0)');
+  g.addColorStop(0, 'rgba(225,29,46,0)'); g.addColorStop(0.5, 'rgba(225,29,46,.35)'); g.addColorStop(1, 'rgba(225,29,46,0)');
   ctx.fillStyle = g; ctx.fillRect(0, 0, 64, 256);
   const h = ctx.createLinearGradient(0, 0, 64, 0);
   h.addColorStop(0, 'rgba(0,0,0,1)'); h.addColorStop(0.5, 'rgba(0,0,0,0)'); h.addColorStop(1, 'rgba(0,0,0,1)');
@@ -188,8 +188,8 @@ function buildCharacter(build, ballTex) {
 
   const skin = look.skin;
   const hair = HAIR_COLORS[look.hairColor] || '#111';
-  const jersey = JERSEY_COLORS[look.jersey] || '#39ff14';
-  const trim = look.jersey === 'Black' ? '#39ff14' : isLight(jersey) ? '#111111' : '#ffffff';
+  const jersey = JERSEY_COLORS[look.jersey] || '#c8102e';
+  const trim = look.jersey === 'Black' ? '#e11d2e' : isLight(jersey) ? '#111111' : '#ffffff';
   const shoe = SHOE_COLORS[look.shoes] || '#111';
   const tats = new Set(look.tattoos || []);
   const ink = mix(skin, '#0b0b12', 0.78);
@@ -672,8 +672,8 @@ export class PlayerStage {
     container.appendChild(this.renderer.domElement);
 
     const scene = this.scene = new THREE.Scene();
-    scene.background = new THREE.Color('#050706');
-    scene.fog = new THREE.Fog('#050706', 9, 26);
+    scene.background = new THREE.Color('#070707');
+    scene.fog = new THREE.Fog('#070707', 9, 26);
     this.camera = new THREE.PerspectiveCamera(30, 1, 0.05, 80);
 
     scene.add(new THREE.HemisphereLight(0xcfe3ff, 0x0b0b0b, 0.75));
@@ -683,20 +683,20 @@ export class PlayerStage {
     Object.assign(key.shadow.camera, { left: -3, right: 3, top: 4, bottom: -1, near: 0.5, far: 20 });
     key.shadow.bias = -0.0005;
     scene.add(key);
-    const rim = new THREE.DirectionalLight(0x39ff14, 2.2); rim.position.set(-3.5, 3, -4); scene.add(rim);
-    const rim2 = new THREE.DirectionalLight(0x8cff6a, 1.0); rim2.position.set(3.5, 2.5, -3.5); scene.add(rim2);
+    const rim = new THREE.DirectionalLight(0xe11d2e, 2.4); rim.position.set(-3.5, 3, -4); scene.add(rim);
+    const rim2 = new THREE.DirectionalLight(0xff5a6a, 1.0); rim2.position.set(3.5, 2.5, -3.5); scene.add(rim2);
     const fill = new THREE.DirectionalLight(0xb8c8ff, 0.6); fill.position.set(-3, 2, 3); scene.add(fill);
 
     const floorTex = floorTexture(); floorTex.wrapS = floorTex.wrapT = THREE.RepeatWrapping; floorTex.repeat.set(4, 4);
     const floor = new THREE.Mesh(new THREE.CircleGeometry(16, 64), new THREE.MeshStandardMaterial({ map: floorTex, roughness: 0.35, metalness: 0.05 }));
     floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
-    const pad = new THREE.Mesh(new THREE.CylinderGeometry(1.15, 1.2, 0.04, 64), new THREE.MeshStandardMaterial({ color: '#0d0f0d', roughness: 0.5, metalness: 0.4 }));
+    const pad = new THREE.Mesh(new THREE.CylinderGeometry(1.15, 1.2, 0.04, 64), new THREE.MeshStandardMaterial({ color: '#0e0e10', roughness: 0.5, metalness: 0.4 }));
     pad.position.y = 0.02; pad.receiveShadow = true; scene.add(pad);
     this.floorY = 0.04;
-    const ringMat = new THREE.MeshBasicMaterial({ color: 0x39ff14 });
+    const ringMat = new THREE.MeshBasicMaterial({ color: 0xe11d2e });
     const ring = new THREE.Mesh(new THREE.TorusGeometry(1.18, 0.012, 8, 96), ringMat);
     ring.rotation.x = Math.PI / 2; ring.position.y = 0.042; scene.add(ring);
-    const ring2 = new THREE.Mesh(new THREE.TorusGeometry(1.45, 0.006, 6, 96), new THREE.MeshBasicMaterial({ color: 0x39ff14, transparent: true, opacity: 0.35 }));
+    const ring2 = new THREE.Mesh(new THREE.TorusGeometry(1.45, 0.006, 6, 96), new THREE.MeshBasicMaterial({ color: 0xe11d2e, transparent: true, opacity: 0.35 }));
     ring2.rotation.x = Math.PI / 2; ring2.position.y = 0.01; scene.add(ring2);
     this.ring = ring;
 
@@ -746,6 +746,8 @@ export class PlayerStage {
   stop() { this.blendFrom = this._snapshot(); this.clip = idleClip(); this.clipKind = null; this.clipTime = 0; }
 
   setView(view) { this.view = view; }
+  pause() { this.renderer.setAnimationLoop(null); }
+  resume() { this.clock.getDelta(); this.renderer.setAnimationLoop(() => this._tick()); }
   setAutoRotate(on) { this.autoRotate = on; }
 
   resize() {
@@ -864,7 +866,7 @@ export class PlayerStage {
     }
     this.turntable.rotation.y = this.yaw;
     if (this.frozen == null) this._applyClip(dt);
-    this.ring.material.color.setHSL(0.31, 1, 0.48 + Math.sin(performance.now() / 500) * 0.06);
+    this.ring.material.color.setHSL(0.986, 0.85, 0.48 + Math.sin(performance.now() / 500) * 0.06);
 
     if (this.char) {
       const H = this.char.H;

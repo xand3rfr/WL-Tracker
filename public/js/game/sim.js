@@ -48,13 +48,17 @@ export function buildAtOvr(target, opts = {}) {
     if (!best || Math.abs(overall(b) - target) < Math.abs(overall(best) - target) || overall(b) >= target) best = b;
     if (overall(best) >= target) break;
   }
-  const base = clone(best.attrs);
+  return scaleToOvr(best, target);
+}
+
+export function scaleToOvr(build, target) {
+  const base = clone(build.attrs);
   let lo = 0, hi = 1;
-  const setK = k => { for (const a of ATTR_KEYS) best.attrs[a] = Math.round(25 + (base[a] - 25) * k); };
-  for (let it = 0; it < 16; it++) { const k = (lo + hi) / 2; setK(k); if (overall(best) < target) lo = k; else hi = k; }
+  const setK = k => { for (const a of ATTR_KEYS) build.attrs[a] = Math.round(25 + (base[a] - 25) * k); };
+  for (let it = 0; it < 16; it++) { const k = (lo + hi) / 2; setK(k); if (overall(build) < target) lo = k; else hi = k; }
   setK(hi);
-  derive(best);
-  return best;
+  derive(build);
+  return build;
 }
 
 const SPOTS = [
@@ -77,26 +81,36 @@ function makePlayer(id, team, build, isUser) {
 }
 
 export class Game {
-  constructor({ userBuild, mode = 3, target = 21, scoring = '23', difficulty = 'pro', teammates, opponents }) {
+  // roster: [{ team, build, human: controller key or null }]; or the single-player shorthand
+  constructor({ userBuild, mode = 3, target = 21, scoring = '23', difficulty = 'pro', teammates, opponents, roster, firstPoss }) {
     this.mode = mode; this.target = target; this.scoring = scoring;
     this.diff = DIFFICULTY[difficulty] || DIFFICULTY.pro;
     this.score = [0, 0];
     this.events = [];
     this.time = 0;
-    const userOvr = overall(userBuild);
-    const mates = teammates || Array.from({ length: mode - 1 }, () => buildAtOvr(clamp(userOvr - 3, 55, 92)));
-    const opps = opponents || Array.from({ length: mode }, () => buildAtOvr(clamp(userOvr + this.diff.ovr, 50, 97)));
-    this.players = [
-      makePlayer(0, 0, userBuild, true),
-      ...mates.map((b, i) => makePlayer(1 + i, 0, b, false)),
-      ...opps.map((b, i) => makePlayer(mode + i, 1, b, false)),
-    ];
-    this.user = this.players[0];
+    if (!roster) {
+      const userOvr = overall(userBuild);
+      const mates = teammates || Array.from({ length: mode - 1 }, () => buildAtOvr(clamp(userOvr - 3, 55, 92)));
+      const opps = opponents || Array.from({ length: mode }, () => buildAtOvr(clamp(userOvr + this.diff.ovr, 50, 97)));
+      roster = [{ team: 0, build: userBuild, human: 'local' }, ...mates.map(build => ({ team: 0, build })), ...opps.map(build => ({ team: 1, build }))];
+    }
+    this.players = roster.map((r, i) => { const p = makePlayer(i, r.team, r.build, !!r.human); p.ctrl = r.human || null; return p; });
+    this.user = this.players.find(p => p.isUser) || this.players[0];
+    this.humanTeams = [0, 1].map(t => this.players.some(p => p.team === t && p.isUser));
     this.ball = { state: 'held', holder: this.user, x: 0, y: 1, z: 0, vx: 0, vy: 0, vz: 0, flight: null, lastTouch: 0, fromShot: null, spin: 0 };
     this.assignDefense();
     this.lastPass = null;
     this.winner = null;
-    this.setupCheck(Math.random() < 0.5 ? 0 : 1, true);
+    this.setupCheck(firstPoss ?? (Math.random() < 0.5 ? 0 : 1), true);
+  }
+
+  // AI on a team with no humans plays at the chosen difficulty; AI teammates of humans play at a steady level
+  aiTuned(p) { return !this.humanTeams[p.team]; }
+
+  // a disconnected human hands their player to the AI
+  releaseControl(ctrl) {
+    for (const p of this.players) if (p.ctrl === ctrl) { p.isUser = false; p.ctrl = null; }
+    this.humanTeams = [0, 1].map(t => this.players.some(p => p.team === t && p.isUser));
   }
 
   team(t) { return this.players.filter(p => p.team === t); }
@@ -117,7 +131,7 @@ export class Game {
     this.needsClear = false;
     this.lastPass = null;
     const off = this.team(team), def = this.team(1 - team);
-    const handler = team === 0 ? this.user : off.reduce((a, b) => (rt(b, 'ballHandle') > rt(a, 'ballHandle') ? b : a));
+    const handler = off.find(p => p.isUser) || off.reduce((a, b) => (rt(b, 'ballHandle') > rt(a, 'ballHandle') ? b : a));
     const spots = this.mode === 2 ? [[4.9, 5.2]] : [[-5.3, 4.8], [5.3, 4.8]];
     let si = 0;
     for (const p of off) {
@@ -167,18 +181,21 @@ export class Game {
       this.shotClock -= dt;
       if (this.shotClock <= 0) { this.turnover(this.poss, 'Shot Clock Violation'); return; }
     }
-    this.handleUser(input, dt);
-    for (const p of this.players) if (!p.isUser) this.ai(p, dt);
-    this.updatePlayers(dt, input);
+    // a single input object drives the local user; a map keys inputs by controller
+    const inputs = input && 'mx' in input ? { [this.user.ctrl]: input } : input || {};
+    for (const p of this.players) {
+      if (p.isUser) this.handleUser(p, inputs[p.ctrl] || null);
+      else this.ai(p, dt);
+    }
+    this.updatePlayers(dt);
     this.updateBall(dt);
     const h = this.ball.state === 'held' ? this.ball.holder : null;
     if (h && this.needsClear && h.team === this.poss && isThree(h.x, h.z)) { this.needsClear = false; this.emit('cleared', { team: h.team }); }
   }
 
   // ---------- user ----------
-  handleUser(input, dt) {
-    const p = this.user;
-    if (!input) return;
+  handleUser(p, input) {
+    if (!input) { p.want.x = 0; p.want.z = 0; p.want.sprint = false; return; }
     const free = p.state === 'move' && p.stumble <= 0;
     p.want.x = input.mx; p.want.z = input.mz; p.want.sprint = input.sprint; p.want.face = null;
     if (p.state === 'jumper' && !p.shot.released && (input.shootReleased || !input.shoot)) this.releaseJumper(p, null);
@@ -510,7 +527,7 @@ export class Game {
       const px = x0 + (tx - x0) * t, pz = z0 + (tz - z0) * t;
       const off = hyp(q.x - px, q.z - pz);
       if (off > 0.85) continue;
-      const diff = q.isUser ? 1 : this.diff.steal;
+      const diff = q.isUser ? 1 : this.aiTuned(q) ? this.diff.steal : 0.8;
       const pi = (0.3 + 0.45 * rt(q, 'steal')) * (1 - 0.45 * rt(p, 'passAccuracy')) * (1 - off / 0.85) * diff * (1 + badgeBoost(q, 'interceptor', 0.08));
       if (Math.random() < pi) { receiver = q; break; }
     }
@@ -674,7 +691,7 @@ export class Game {
     p.ai.t -= dt;
     p.want.sprint = false; p.want.face = null;
     if (p.state === 'jumper' || p.state === 'finish' || p.state === 'jump') return;
-    const iq = p.team === 1 ? this.diff.iq : 0.9;
+    const iq = this.aiTuned(p) ? this.diff.iq : 0.9;
     if (b.state === 'loose' || (b.state === 'air' && b.flight.kind === 'shot')) return this.aiChase(p);
     const offense = (b.state === 'held' ? b.holder.team : b.flight.passer.team) === p.team;
     if (offense) {
@@ -775,7 +792,7 @@ export class Game {
     this.startJumper(p);
     const s = p.shot;
     const r = this.shotRating(p, rimDist(p.x, p.z));
-    const sigma = (0.1 - 0.06 * r) * (p.team === 1 ? this.diff.aim : 1.05);
+    const sigma = (0.1 - 0.06 * r) * (this.aiTuned(p) ? this.diff.aim : 1.05);
     s.aiRelease = s.ideal + gauss() * sigma;
   }
 
@@ -835,7 +852,7 @@ export class Game {
       if (p.ai.t <= 0) {
         p.ai.t = 0.25;
         const d = hyp(m.x - p.x, m.z - p.z);
-        const rate = 0.32 * rt(p, 'steal') * this.diff.steal * (p.team === 0 ? 0.8 : 1);
+        const rate = 0.32 * rt(p, 'steal') * (this.aiTuned(p) ? this.diff.steal : 0.8);
         if (d < 1.3 && Math.random() < rate * 0.25) this.stealAttempt(p);
       }
     } else {
@@ -849,7 +866,7 @@ export class Game {
     const shooter = this.players.find(q => q.team !== p.team && (q.state === 'jumper' && !q.shot.released || q.state === 'finish' && !q.finish.released));
     if (shooter) {
       const d = hyp(shooter.x - p.x, shooter.z - p.z);
-      const react = (p.team === 1 ? this.diff.react : 0.24) + 0.1 * (1 - rt(p, 'block'));
+      const react = (this.aiTuned(p) ? this.diff.react : 0.24) + 0.1 * (1 - rt(p, 'block'));
       if (shooter.state === 'jumper') {
         if (d < 2.4 && shooter.st > react && shooter.st > shooter.shot.Tm * 0.55 && p.state === 'move') {
           if (d > 1.0) this.moveTo(p, shooter.x, shooter.z, true);
@@ -858,6 +875,63 @@ export class Game {
       } else if (rimDist(p.x, p.z) < 3 && d < 2.2 && shooter.st > react + 0.15 && p.state === 'move') {
         this.startJump(p);
       }
+    }
+  }
+
+  // ---------- network: the host streams snapshots, clients mirror them ----------
+  snapshot() {
+    const r = v => Math.round(v * 1000) / 1000;
+    const b = this.ball;
+    const snap = {
+      T: r(this.time), ph: this.phase, pT: r(this.phaseT), sc: [...this.score], po: this.poss, cl: r(this.shotClock), nc: this.needsClear, w: this.winner,
+      p: this.players.map(p => [
+        r(p.x), r(p.z), r(p.y), r(p.vx), r(p.vz), r(p.facing), p.state, r(p.st), r(p.energy), r(p.gait), p.isUser ? 1 : 0,
+        p.shot ? { Tm: r(p.shot.Tm), i: r(p.shot.ideal), w: r(p.shot.window), rl: p.shot.released, rt: r(p.shot.relT), g: p.shot.grade || null, a: p.shot.anim } : null,
+        p.finish ? { k: p.finish.kind, d: p.finish.dur, r: p.finish.rel, rl: p.finish.released, a: p.finish.anim } : null,
+        p.stats,
+      ]),
+      b: [b.state, b.holder ? b.holder.id : -1, r(b.x), r(b.y), r(b.z), r(b.vx), r(b.vy), r(b.vz), b.flight?.kind || null],
+      e: [],
+    };
+    return snap;
+  }
+
+  applySnapshot(s) {
+    this.time = s.T; this.phase = s.ph; this.phaseT = s.pT; this.score = s.sc; this.poss = s.po; this.shotClock = s.cl; this.needsClear = s.nc; this.winner = s.w;
+    s.p.forEach((a, i) => {
+      const p = this.players[i];
+      if (!p) return;
+      const [x, z, y, vx, vz, f, state, st, energy, gait, human, shot, fin, stats] = a;
+      // small corrections blend, big ones snap
+      const blend = hyp(p.x - x, p.z - z) < 0.8 ? 0.5 : 1;
+      p.x += (x - p.x) * blend; p.z += (z - p.z) * blend;
+      p.y = y; p.vx = vx; p.vz = vz; p.facing = f; p.energy = energy; p.gait = gait; p.stats = stats;
+      p.isUser = !!human;
+      if (p.state !== state || Math.abs(p.st - st) > 0.15) p.st = st;
+      p.state = state;
+      p.shot = shot ? { Tm: shot.Tm, ideal: shot.i, window: shot.w, released: shot.rl, relT: shot.rt, grade: shot.g, anim: shot.a } : null;
+      p.finish = fin ? { kind: fin.k, dur: fin.d, rel: fin.r, released: fin.rl, anim: fin.a } : null;
+    });
+    const [state, hid, x, y, z, vx, vy, vz, fk] = s.b;
+    const b = this.ball;
+    Object.assign(b, { state, holder: hid >= 0 ? this.players[hid] : null, x, y, z, vx, vy, vz, flight: fk ? { kind: fk } : null });
+    return s.e || [];
+  }
+
+  // dead-reckoning between snapshots on clients
+  extrapolate(dt) {
+    this.time += dt; this.phaseT += dt;
+    if (this.phase === 'live' && this.ball.state === 'held') this.shotClock = Math.max(0, this.shotClock - dt);
+    for (const p of this.players) {
+      p.st += dt;
+      if (p.state === 'move' || p.state === 'pass' || p.state === 'reach') {
+        p.x += p.vx * dt; p.z += p.vz * dt; p.gait += hyp(p.vx, p.vz) * dt;
+      }
+    }
+    const b = this.ball;
+    if (b.state === 'air' || b.state === 'loose' || b.state === 'dead') {
+      b.vy -= G * dt; b.x += b.vx * dt; b.y += b.vy * dt; b.z += b.vz * dt;
+      if (b.y < BALL_R) { b.y = BALL_R; b.vy = -b.vy * 0.6; }
     }
   }
 }

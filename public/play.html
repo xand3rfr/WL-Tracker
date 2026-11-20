@@ -3,9 +3,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-  <title>Blacktop Legends: Play</title>
-  <meta name="description" content="2v2 and 3v3 streetball with your custom MyPLAYER.">
-  <meta name="theme-color" content="#050706">
+  <title>Blacktop Legends</title>
+  <meta name="description" content="2v2 and 3v3 streetball with your custom MyPLAYER. Play the AI or friends online.">
+  <meta name="theme-color" content="#070707">
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -14,70 +14,173 @@
   <link rel="stylesheet" href="/css/play.css">
 </head>
 <body class="play">
-  <!-- pregame -->
-  <section class="menu" id="menu">
-    <header class="topbar">
-      <a class="brand" href="/" title="Back to the builder">
-        <svg class="brand-ball" viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="21" fill="none" stroke="currentColor" stroke-width="3"/><path d="M3 24h42M24 3v42M9 9c8 6 8 24 0 30M39 9c-8 6-8 24 0 30" fill="none" stroke="currentColor" stroke-width="2.5"/></svg>
-        <div class="brand-text"><span class="brand-title">Blacktop Legends</span><span class="brand-sub">Blacktop · Play Now</span></div>
-      </a>
-      <div class="top-actions"><a class="btn ghost" href="/"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg><span>Builder</span></a></div>
-    </header>
-    <div class="menu-body">
-      <div class="menu-col">
-        <h1 class="menu-title"><small>Streetball</small>Blacktop Run</h1>
-        <div class="card">
-          <div class="card-title">Your Player</div>
-          <select class="select" id="pickBuild" aria-label="Choose your build"></select>
-          <div class="me" id="meCard"></div>
-        </div>
-        <div class="card">
-          <div class="card-title">Game Setup</div>
-          <div class="field"><span class="lbl">Mode</span><div class="opts" data-set="mode"><button class="opt" data-v="2">2 v 2</button><button class="opt" data-v="3">3 v 3</button></div></div>
-          <div class="field"><span class="lbl">Game To</span><div class="opts" data-set="target"><button class="opt" data-v="11">11</button><button class="opt" data-v="21">21</button></div></div>
-          <div class="field"><span class="lbl">Scoring</span><div class="opts" data-set="scoring"><button class="opt" data-v="12">1s &amp; 2s</button><button class="opt" data-v="23">2s &amp; 3s</button></div></div>
-          <div class="field"><span class="lbl">Difficulty</span><div class="opts" data-set="difficulty"><button class="opt" data-v="rookie">Rookie</button><button class="opt" data-v="pro">Pro</button><button class="opt" data-v="allstar">All-Star</button><button class="opt" data-v="hof">Hall of Fame</button></div></div>
-        </div>
-      </div>
-      <div class="menu-col">
-        <div class="teams" id="teams"></div>
-        <div class="menu-actions">
-          <button class="btn" id="rerollBtn"><svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.4-5.7M4 4v5h5"/></svg><span>New Teams</span></button>
-          <button class="btn primary big" id="startBtn"><svg viewBox="0 0 24 24"><path d="M7 4v16l13-8z"/></svg><span>Start Game</span></button>
-        </div>
-        <div class="card controls-card">
-          <div class="card-title">Controls</div>
-          <div class="ctl-grid">
-            <span><kbd>W A S D</kbd> / arrows</span><span>Move</span>
-            <span><kbd>Shift</kbd></span><span>Sprint</span>
-            <span><kbd>Space</kbd> hold &amp; release</span><span>Shoot — let go in the <b class="g">green</b>. Near the rim: layup / dunk</span>
-            <span><kbd>E</kbd></span><span>Pass · call for the ball</span>
-            <span><kbd>Space</kbd> on D</span><span>Jump to contest / block</span>
-            <span><kbd>E</kbd> on D</span><span>Steal</span>
-            <span><kbd>Esc</kbd></span><span>Pause</span>
-          </div>
-          <p class="note" style="margin:10px 0 0">On phones: left stick to move (push to the edge to sprint), buttons on the right. After a steal or defensive rebound you must <b>clear the ball</b> past the arc.</p>
-        </div>
-      </div>
+  <!-- ================= MENUS ================= -->
+  <div class="shell" id="shell">
+    <div class="menu-bg" aria-hidden="true">
+      <div class="bg-word">BLACKTOP</div>
+      <div class="bg-streaks"></div>
+      <div class="bg-stage" id="menuStage"></div>
+      <div class="bg-vignette"></div>
     </div>
-  </section>
 
-  <!-- game -->
+    <header class="mhdr">
+      <a class="mlogo" href="/" title="MyPLAYER Builder">
+        <svg viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="21" fill="none" stroke="currentColor" stroke-width="3"/><path d="M3 24h42M24 3v42M9 9c8 6 8 24 0 30M39 9c-8 6-8 24 0 30" fill="none" stroke="currentColor" stroke-width="2.5"/></svg>
+        <span><b>Blacktop</b> Legends</span>
+      </a>
+      <div class="crumbs" id="crumbs"></div>
+      <button class="profile" id="profileBtn" title="Choose your player">
+        <span class="pf-ovr" id="pfOvr">--</span>
+        <span class="pf-text"><b id="pfName">--</b><small id="pfMeta">--</small></span>
+        <svg viewBox="0 0 24 24" class="pf-caret"><path d="M6 9l6 6 6-6"/></svg>
+      </button>
+    </header>
+
+    <!-- main -->
+    <section class="scr" id="scr-main" data-title="Main Menu">
+      <div class="hero">
+        <div class="hero-kicker">Season 1 · Night Run</div>
+        <h1 class="hero-title">Blacktop<br><span>Legends</span></h1>
+      </div>
+      <nav class="tiles" aria-label="Game modes">
+        <button class="tile nav" data-go="setup">
+          <span class="tile-art art-play"></span>
+          <span class="tile-body"><span class="tile-k">Offline</span><span class="tile-t">Play Now</span><span class="tile-d">2v2 or 3v3 against the AI</span></span>
+        </button>
+        <button class="tile nav" data-go="online">
+          <span class="tile-art art-online"></span>
+          <span class="tile-body"><span class="tile-k">Online</span><span class="tile-t">Blacktop Online</span><span class="tile-d">Create or join a room with friends</span></span>
+        </button>
+        <a class="tile nav" href="/" data-go="builder">
+          <span class="tile-art art-builder"></span>
+          <span class="tile-body"><span class="tile-k">Create</span><span class="tile-t">MyPLAYER</span><span class="tile-d">Build and tune your player</span></span>
+        </a>
+        <button class="tile nav" data-go="settings">
+          <span class="tile-art art-settings"></span>
+          <span class="tile-body"><span class="tile-k">Options</span><span class="tile-t">Settings</span><span class="tile-d">Sound, camera and HUD</span></span>
+        </button>
+      </nav>
+    </section>
+
+    <!-- play now -->
+    <section class="scr" id="scr-setup" data-title="Play Now" hidden>
+      <div class="scr-grid">
+        <div class="panel-col">
+          <h2 class="scr-title"><small>Offline</small>Play Now</h2>
+          <div class="rows" id="setupRows"></div>
+        </div>
+        <div class="panel-col">
+          <div class="matchup" id="matchup"></div>
+          <div class="act-row">
+            <button class="btn nav" id="rerollBtn"><svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.4-5.7M4 4v5h5"/></svg><span>New Teams</span></button>
+            <button class="btn primary big nav" id="startBtn"><svg viewBox="0 0 24 24"><path d="M7 4v16l13-8z"/></svg><span>Tip Off</span></button>
+          </div>
+          <details class="howto"><summary>Controls</summary>
+            <div class="ctl-grid">
+              <span><kbd>W A S D</kbd></span><span>Move</span>
+              <span><kbd>Shift</kbd></span><span>Sprint</span>
+              <span><kbd>Space</kbd> hold</span><span>Shoot: release in the white window. Near the rim: layup / dunk</span>
+              <span><kbd>E</kbd></span><span>Pass · call for the ball</span>
+              <span><kbd>Space</kbd> on D</span><span>Contest / block</span>
+              <span><kbd>E</kbd> on D</span><span>Steal</span>
+              <span><kbd>Esc</kbd></span><span>Pause</span>
+            </div>
+          </details>
+        </div>
+      </div>
+    </section>
+
+    <!-- online -->
+    <section class="scr" id="scr-online" data-title="Blacktop Online" hidden>
+      <h2 class="scr-title center"><small>Online</small>Blacktop Online</h2>
+      <div class="online-cards">
+        <div class="ocard">
+          <div class="ocard-k">Host</div>
+          <div class="ocard-t">Create Room</div>
+          <p>Get a 4-letter code to share. Your browser runs the game, so keep this tab open.</p>
+          <button class="btn primary big nav" id="createBtn"><span>Create Room</span></button>
+        </div>
+        <div class="ocard">
+          <div class="ocard-k">Join</div>
+          <div class="ocard-t">Enter Code</div>
+          <p>Ask your friend for their room code.</p>
+          <div class="code-row">
+            <input class="code-input nav" id="codeInput" maxlength="4" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="ABCD" aria-label="Room code">
+            <button class="btn primary nav" id="joinBtn"><span>Join</span></button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- lobby -->
+    <section class="scr" id="scr-lobby" data-title="Lobby" hidden>
+      <div class="lobby-top">
+        <div>
+          <div class="scr-kicker">Room Code</div>
+          <div class="room-code" id="roomCode">----</div>
+        </div>
+        <button class="btn nav" id="inviteBtn"><svg viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a1 1 0 0 1 1-1h10"/></svg><span>Copy Invite Link</span></button>
+      </div>
+      <div class="lobby-grid">
+        <div class="side side-home"><div class="side-head"><span>Home</span><b id="homeOvr"></b></div><div class="slots" id="slotsHome"></div></div>
+        <div class="vs-big">VS</div>
+        <div class="side side-away"><div class="side-head"><span>Away</span><b id="awayOvr"></b></div><div class="slots" id="slotsAway"></div></div>
+      </div>
+      <div class="lobby-bottom">
+        <div class="rows compact" id="lobbyRows"></div>
+        <div class="lobby-actions">
+          <button class="btn nav" id="sideBtn"><span>Switch Side</span></button>
+          <button class="btn nav" id="pickBtn"><span>Change Player</span></button>
+          <button class="btn nav" id="readyBtn"><span>Ready Up</span></button>
+          <button class="btn primary big nav" id="lobbyStartBtn"><svg viewBox="0 0 24 24"><path d="M7 4v16l13-8z"/></svg><span>Start Game</span></button>
+        </div>
+        <p class="note center" id="lobbyNote"></p>
+      </div>
+    </section>
+
+    <!-- settings -->
+    <section class="scr" id="scr-settings" data-title="Settings" hidden>
+      <div class="narrow">
+        <h2 class="scr-title"><small>Options</small>Settings</h2>
+        <div class="rows" id="settingsRows"></div>
+      </div>
+    </section>
+
+    <footer class="hints" id="hints">
+      <span><kbd>↑ ↓ ← →</kbd> Navigate</span><span><kbd>Enter</kbd> Select</span><span id="hintBack"><kbd>Esc</kbd> Back</span>
+    </footer>
+  </div>
+
+  <!-- player picker -->
+  <dialog class="picker" id="picker">
+    <div class="pk-head">
+      <h3>Choose Player</h3>
+      <div class="pk-tabs" role="tablist">
+        <button class="pk-tab on" data-pk="mine">My Builds</button>
+        <button class="pk-tab" data-pk="preset">Presets</button>
+      </div>
+      <button class="icon-btn" data-pk-close aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    </div>
+    <div class="pk-grid" id="pkGrid"></div>
+  </dialog>
+
+  <!-- ================= GAME ================= -->
   <section class="game" id="game" hidden>
     <div class="court" id="court"></div>
     <div class="hud">
       <div class="scorebug">
-        <div class="sb-team me"><span class="sb-name">Your Squad</span><span class="sb-pts" id="sMe">0</span></div>
+        <div class="sb-team home"><span class="sb-name" id="sbHome">Home</span><span class="sb-pts" id="sMe">0</span></div>
         <div class="sb-mid"><span class="sb-clock" id="sClock">20</span><span class="sb-to" id="sTo">To 21</span></div>
-        <div class="sb-team them"><span class="sb-pts" id="sThem">0</span><span class="sb-name">Opponents</span></div>
+        <div class="sb-team away"><span class="sb-pts" id="sThem">0</span><span class="sb-name" id="sbAway">Away</span></div>
         <span class="sb-poss" id="sPoss" aria-hidden="true"></span>
       </div>
       <button class="icon-btn pause-btn" id="pauseBtn" title="Pause (Esc)" aria-label="Pause"><svg viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></svg></button>
-      <button class="icon-btn mute-btn" id="muteBtn" title="Sound" aria-pressed="false" aria-label="Mute"><svg viewBox="0 0 24 24"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M17 9c1.5 1.5 1.5 4.5 0 6" id="muteWave"/></svg></button>
+      <div class="net-tag" id="netTag" hidden></div>
       <div class="banner" id="banner"></div>
       <div class="clear-tag" id="clearTag">Clear the ball</div>
       <div class="meter" id="meter"><div class="meter-fill" id="meterFill"></div><div class="meter-green" id="meterGreen"></div></div>
       <div class="grade" id="grade"></div>
+      <div class="tags" id="tags"></div>
       <div class="me-hud">
         <span class="me-name" id="hudName"></span>
         <div class="energy"><div class="energy-fill" id="energy"></div></div>
@@ -94,10 +197,11 @@
     <div class="overlay" id="pause" hidden>
       <div class="ov-card">
         <h2 class="ov-title">Paused</h2>
+        <p class="note" id="pauseNote"></p>
         <div class="ov-actions">
           <button class="btn primary" data-ov="resume">Resume</button>
-          <button class="btn" data-ov="restart">Restart</button>
-          <button class="btn" data-ov="menu">Quit to Menu</button>
+          <button class="btn" data-ov="restart" id="ovRestart">Restart</button>
+          <button class="btn" data-ov="quit">Quit</button>
         </div>
       </div>
     </div>
@@ -107,11 +211,7 @@
         <h2 class="ov-title" id="ovTitle">You Win</h2>
         <div class="ov-score" id="ovScore"></div>
         <div class="box" id="ovBox"></div>
-        <div class="ov-actions">
-          <button class="btn primary" data-ov="again">Run It Back</button>
-          <button class="btn" data-ov="menu">New Game</button>
-          <a class="btn" href="/">Builder</a>
-        </div>
+        <div class="ov-actions" id="ovActions"></div>
       </div>
     </div>
   </section>

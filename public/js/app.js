@@ -436,7 +436,7 @@ AFTER.attributes = p => {
 const TIER_COLORS = ['var(--bronze)', 'var(--silver)', 'var(--gold)', 'var(--hof)', 'var(--legend)'];
 const CAT_GLYPH = { finishing: 'F', shooting: 'S', playmaking: 'P', defense: 'D', rebounding: 'R', physicals: 'G' };
 function badgeIcon(cat, tier) {
-  const c = tier >= 0 ? TIER_COLORS[tier] : '#2a302b';
+  const c = tier >= 0 ? TIER_COLORS[tier] : '#2d2d31';
   return `<svg class="badge-icon" viewBox="0 0 52 58" aria-hidden="true">
     <path d="M26 2l22 8v18c0 13-9 23-22 28C13 51 4 41 4 28V10z" fill="${c}" stroke="rgba(255,255,255,.25)" stroke-width="1.5"/>
     <path d="M26 8l16 6v14c0 10-7 18-16 22-9-4-16-12-16-22V14z" fill="rgba(0,0,0,.28)"/>
@@ -666,7 +666,7 @@ function importFrom(text) {
 }
 
 // ---------- compare ----------
-const CMP_COLORS = { a: '#39ff14', b: '#3ab0ff' };
+const CMP_COLORS = { a: '#e11d2e', b: '#3ab0ff' };
 function cmpOptions() {
   const opts = [{ id: 'current', label: `Current: ${fullName(state.build)}`, build: state.build }];
   for (const s of [...state.saved].sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0))) opts.push({ id: s.id, label: `${fullName(s)} (${s.position})`, build: s });
@@ -677,9 +677,9 @@ function radarSVG(a, b) {
   const cats = D.ATTR_GROUPS.map(g => g.id), N = cats.length, R = 110, cx = 150, cy = 140;
   const pt = (i, v) => { const ang = -Math.PI / 2 + (i / N) * Math.PI * 2, r = ((v - 25) / 74) * R; return [cx + Math.cos(ang) * r, cy + Math.sin(ang) * r]; };
   const poly = (g, col) => `<polygon points="${cats.map((c, i) => pt(i, g[c]).join(',')).join(' ')}" fill="${col}" fill-opacity=".18" stroke="${col}" stroke-width="2.5" stroke-linejoin="round"/>`;
-  const rings = [50, 75, 99].map(v => `<polygon points="${cats.map((c, i) => pt(i, v).join(',')).join(' ')}" fill="none" stroke="#2a302b" stroke-width="1"/>`).join('');
-  const spokes = cats.map((c, i) => { const [x, y] = pt(i, 99); return `<line x1="${cx}" y1="${cy}" x2="${x}" y2="${y}" stroke="#2a302b"/>`; }).join('');
-  const labels = cats.map((c, i) => { const [x, y] = pt(i, 116); return `<text x="${x}" y="${y}" fill="#8d978f" font-size="11" font-family="Barlow Condensed" font-weight="700" letter-spacing="1" text-anchor="middle" dominant-baseline="middle">${D.ATTR_GROUPS[i].label.toUpperCase()}</text>`; }).join('');
+  const rings = [50, 75, 99].map(v => `<polygon points="${cats.map((c, i) => pt(i, v).join(',')).join(' ')}" fill="none" stroke="#2d2d31" stroke-width="1"/>`).join('');
+  const spokes = cats.map((c, i) => { const [x, y] = pt(i, 99); return `<line x1="${cx}" y1="${cy}" x2="${x}" y2="${y}" stroke="#2d2d31"/>`; }).join('');
+  const labels = cats.map((c, i) => { const [x, y] = pt(i, 116); return `<text x="${x}" y="${y}" fill="#9a9aa0" font-size="11" font-family="Barlow Condensed" font-weight="700" letter-spacing="1" text-anchor="middle" dominant-baseline="middle">${D.ATTR_GROUPS[i].label.toUpperCase()}</text>`; }).join('');
   return `<svg class="radar" viewBox="0 0 300 280" role="img" aria-label="Category comparison radar">${rings}${spokes}${poly(a, CMP_COLORS.a)}${poly(b, CMP_COLORS.b)}${labels}</svg>`;
 }
 RENDER.compare = () => {
