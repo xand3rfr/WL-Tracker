@@ -5,7 +5,8 @@ import { CourtView } from './game/view.js';
 import { Input, Sfx } from './game/input.js';
 import { presetBuilds } from './game/presets.js';
 import { Net, createRoom } from './game/net.js';
-import { PlayerStage } from './player3d.js';
+import { playTrailer } from './trailer.js';
+import * as THREE from '../vendor/three.module.min.js';
 
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
@@ -22,15 +23,19 @@ const fullName = b => `${b.identity.first} ${b.identity.last}`.trim() || 'Unname
 const ARROW_L = '<svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>';
 const ARROW_R = '<svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg>';
 
-const prefs = Object.assign({ sound: true, camera: 'broadcast', names: true }, store.get('bl_prefs', {}));
+const COARSE = window.matchMedia('(pointer: coarse)').matches;
+const prefs = Object.assign({ sound: true, camera: 'broadcast', names: true, touch: 'auto', quality: COARSE ? 'low' : 'medium', ambience: true }, store.get('bl_prefs', {}));
 const setup = Object.assign({ mode: 3, target: 21, scoring: '23', difficulty: 'pro', pick: { kind: 'mine', id: 'current' } }, store.get('bl_play_v2', {}));
 const savePrefs = () => store.set('bl_prefs', prefs);
+let touchedOnce = false;
+// touch controls: forced on, forced off, or shown on touch devices
+function applyTouch() { document.body.classList.toggle('touchmode', prefs.touch === 'on' || (prefs.touch === 'auto' && (COARSE || touchedOnce))); }
 const saveSetup = () => store.set('bl_play_v2', setup);
 
 const sfx = new Sfx();
 sfx.setMuted(!prefs.sound);
 let input = null;
-let menuStage = null;
+let attract = null;
 let squads = null;
 
 // ================= player choice =================
@@ -58,7 +63,7 @@ function renderProfile() {
   $('#pfOvr').textContent = B.overall(b);
   $('#pfName').textContent = fullName(b);
   $('#pfMeta').textContent = `${b.position} · ${D.fmtHeight(b.body.height)} · ${B.archetype(b).name}`;
-  menuStage?.setBuild(b);
+  if (attract && attract.buildKey !== JSON.stringify(b.identity) + b.body.height) restartMenuScene();
 }
 
 function openPicker(onPick) {
@@ -192,6 +197,10 @@ ENTER.settings = () => {
     { key: 'sound', label: 'Sound', values: [[true, 'On'], [false, 'Off']], get: () => prefs.sound, set: v => { prefs.sound = v; sfx.setMuted(!v); savePrefs(); } },
     { key: 'camera', label: 'Camera', values: [['broadcast', 'Broadcast'], ['close', 'Close']], get: () => prefs.camera, set: v => { prefs.camera = v; savePrefs(); } },
     { key: 'names', label: 'Player Names', values: [[true, 'On'], [false, 'Off']], get: () => prefs.names, set: v => { prefs.names = v; savePrefs(); } },
+    { key: 'quality', label: 'Graphics', values: [['low', 'Low'], ['medium', 'Medium'], ['high', 'High']], get: () => prefs.quality, set: v => { prefs.quality = v; savePrefs(); restartMenuScene(); } },
+    { key: 'touch', label: 'Touch Controls', values: [['auto', 'Auto'], ['on', 'On'], ['off', 'Off']], get: () => prefs.touch, set: v => { prefs.touch = v; savePrefs(); applyTouch(); } },
+    { key: 'ambience', label: 'Crowd Ambience', values: [[true, 'On'], [false, 'Off']], get: () => prefs.ambience, set: v => { prefs.ambience = v; savePrefs(); } },
+    { key: 'trailer', label: 'Intro Trailer', display: () => 'Watch', action: () => playIntro() },
   ]);
 };
 
@@ -296,8 +305,57 @@ let G = null; // { game, view, localId, online, host, ... }
 let last = 0, acc = 0, pending = null, gradeUntil = 0, meterUntil = 0;
 const remote = {};
 
-function showMenus() { $('#game').hidden = true; $('#shell').hidden = false; menuStage?.resume(); }
-function showGame() { $('#shell').hidden = true; $('#game').hidden = false; menuStage?.pause(); }
+function showMenus() { $('#game').hidden = true; $('#shell').hidden = false; startMenuScene(); }
+function showGame() { $('#shell').hidden = true; $('#game').hidden = false; stopMenuScene(); }
+
+// ================= attract mode: a live AI game behind the menus =================
+function startMenuScene() {
+  if (attract || !$('#game').hidden) return;
+  const b = pickedBuild();
+  let game, view;
+  try {
+    game = new Game({ userBuild: B.clone(b), mode: 2, target: 999, difficulty: 'allstar' });
+    game.user.isUser = false;
+    view = new CourtView($('#menuStage'), game, { quality: prefs.quality === 'high' ? 'medium' : prefs.quality });
+  } catch (err) { console.error(err); return; }
+  view.chars.forEach(ch => { ch.ring.visible = false; if (ch.arrow) ch.arrow.visible = false; });
+  $('#menuStage').classList.add('on');
+  const a = attract = { game, view, t: 0, last: performance.now(), raf: 0, buildKey: JSON.stringify(b.identity) + b.body.height };
+  const shots = [
+    // slow high orbit, low sideline tracking, under the rim, behind the shooter
+    (t, bp) => ({ pos: new THREE.Vector3(Math.sin(t * 0.05) * 12, 6.5, 7 + Math.cos(t * 0.05) * 12), look: new THREE.Vector3(bp.x * 0.3, 1.2, 5), fov: 40 }),
+    (t, bp) => ({ pos: new THREE.Vector3(8.6, 1.3, bp.z + 1.5), look: new THREE.Vector3(bp.x, 1.3, bp.z - 0.5), fov: 38 }),
+    (t, bp) => ({ pos: new THREE.Vector3(-2.4, 0.8, 0.6), look: new THREE.Vector3(bp.x * 0.6, 2.4, bp.z * 0.6 + 1), fov: 50 }),
+    (t, bp) => ({ pos: new THREE.Vector3(bp.x * 0.7, 3.2, bp.z + 6.5), look: new THREE.Vector3(bp.x * 0.5, 1.6, 2), fov: 42 }),
+  ];
+  const loop = now => {
+    if (attract !== a) return;
+    const dt = Math.max(0, Math.min(0.05, (now - a.last) / 1000)); a.last = now; a.t += dt;
+    const steps = Math.max(1, Math.round(dt * 60));
+    for (let i = 0; i < steps; i++) game.step(dt / steps, null);
+    game.events.length = 0;
+    const shot = shots[Math.floor(a.t / 8) % shots.length];
+    view.camOverride = shot(a.t, view.ball.position);
+    view.update(dt, now / 1000);
+    a.raf = requestAnimationFrame(loop);
+  };
+  a.raf = requestAnimationFrame(loop);
+}
+function stopMenuScene() {
+  if (!attract) return;
+  cancelAnimationFrame(attract.raf);
+  attract.view.dispose();
+  attract = null;
+  $('#menuStage').classList.remove('on');
+}
+function restartMenuScene() { stopMenuScene(); startMenuScene(); }
+
+async function playIntro() {
+  stopMenuScene();
+  await playTrailer({ quality: prefs.quality, requireStart: false });
+  try { localStorage.setItem('bl_intro_seen', '1'); } catch { /* storage unavailable */ }
+  startMenuScene();
+}
 
 function runGame({ game, localId, online, host, jerseys }) {
   stopGame();
@@ -305,7 +363,7 @@ function runGame({ game, localId, online, host, jerseys }) {
   $('#over').hidden = true; $('#pause').hidden = true;
   let view;
   try {
-    view = new CourtView($('#court'), game, { localId, jerseys, camera: prefs.camera });
+    view = new CourtView($('#court'), game, { localId, jerseys, camera: prefs.camera, quality: prefs.quality });
   } catch (err) {
     console.error(err);
     toast('This game needs WebGL, which is not available in this browser.');
@@ -330,12 +388,14 @@ function runGame({ game, localId, online, host, jerseys }) {
   $('#tags').innerHTML = '';
   for (const k of Object.keys(remote)) delete remote[k];
   window.__game = game; window.__view = view;
+  if (prefs.ambience) sfx.startAmbience(0.16);
   if (online && host) ensureTicker();
   last = performance.now(); acc = 0; pending = null;
   banner(game.poss === me.team ? 'Your Ball' : 'Their Ball', 'Check');
   requestAnimationFrame(frame);
 }
 function stopGame() {
+  sfx.stopAmbience();
   if (G) { G.view.dispose(); G = null; }
 }
 
@@ -391,7 +451,7 @@ function ensureTicker() {
 }
 
 function tick(now) {
-  const dt = Math.min(0.1, (now - last) / 1000); last = now;
+  const dt = Math.max(0, Math.min(0.1, (now - last) / 1000)); last = now;
   const inp = input.read();
   if (inp.pausePressed && G.game.phase !== 'over') setPaused(!G.paused);
   const g = G.game;
@@ -457,7 +517,8 @@ function handleEvents(events) {
   for (const e of events) {
     switch (e.type) {
       case 'make': {
-        sfx.swish(); G.view.netKick = 1;
+        if (e.kind === 'dunk') sfx.dunk(); else sfx.swish();
+        G.view.netKick = 1;
         const kind = e.kind === 'dunk' ? 'Slam!' : e.kind === 'three' ? 'Splash!' : e.kind === 'layup' ? 'And Finish' : 'Bucket';
         banner(`${kind} +${e.pts}`, pname(e.id) + (e.assist != null ? ` · ast ${pname(e.assist)}` : ''), !mine(e.team));
         bump(e.team === 0 ? '#sMe' : '#sThem');
@@ -608,13 +669,8 @@ function menuKeys(e) {
 }
 
 function boot() {
-  try {
-    menuStage = new PlayerStage($('#menuStage'));
-    menuStage.setAutoRotate(true);
-    menuStage.yaw = -0.35;
-    $('#menuStage').classList.add('on');
-  } catch { menuStage = null; }
   renderProfile();
+  startMenuScene();
   go('main');
 
   $('#profileBtn').addEventListener('click', () => openPicker(() => {
@@ -668,9 +724,8 @@ function boot() {
     }
   });
   document.addEventListener('keydown', menuKeys);
-  const coarse = window.matchMedia('(pointer: coarse)').matches;
-  if (coarse) document.body.classList.add('touchmode');
-  window.addEventListener('touchstart', () => document.body.classList.add('touchmode'), { once: true, passive: true });
+  applyTouch();
+  window.addEventListener('touchstart', () => { touchedOnce = true; applyTouch(); }, { once: true, passive: true });
   document.addEventListener('visibilitychange', () => { if (document.hidden && G && !G.online && G.game.phase !== 'over') setPaused(true); });
 
   const room = new URLSearchParams(location.search).get('room');

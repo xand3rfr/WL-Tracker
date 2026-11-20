@@ -17,6 +17,19 @@ Build a player from scratch: identity, body, position, attributes, badges and an
 - **Animations**: jump shot, free throw, dribble, size-ups, layups, dunk packages and passing, each with rating or height requirements.
 - **Saved builds** (kept in your browser), **share links**, **compare** two builds, a **random player** generator, and **reset**.
 
+## Intro trailer
+
+The first time you open the builder, a short trailer plays. It's skippable, and you can replay it from Settings → Intro Trailer or by opening `/?intro`. It runs live in the game engine: the floodlights come on, a preset star breaks a defender's ankles and throws down a slow-motion dunk, then **Coming Soon** cards tease *The City*, *Pro-Am 5v5* and *Ranked Seasons*, ending on the MyPLAYER reveal.
+
+## Look and sound
+
+- The court uses **CC0 photo-scanned materials**: asphalt, concrete, a chain-link fence and metal poles. Players wear mesh-fabric jerseys and the ball is pebbled leather.
+- Night lighting comes from an **HDR environment map**, four floodlights, a glass backboard, a cloth net that ripples on makes, a live shot clock, a neon sign and a city skyline.
+- **Post-processing:** bloom, anti-aliasing and (on High) ambient occlusion. **Settings → Graphics** switches between Low, Medium and High.
+- **Recorded CC0 sound:** ball bounces, rim and backboard hits, net swishes, sneaker squeaks, crowd cheers and court ambience.
+- The main menu runs a live AI game in the background, and its tiles are rendered from the game itself.
+- Sources and licenses are in [`public/assets/CREDITS.md`](public/assets/CREDITS.md).
+
 ## Play (`/play.html`)
 
 A 2K-style main menu over your 3D player, with four modes:
@@ -24,7 +37,7 @@ A 2K-style main menu over your 3D player, with four modes:
 - **Play Now**: 2v2 or 3v3 against the AI. Choose a game to 11 or 21, 1s & 2s or 2s & 3s scoring, and Rookie through Hall of Fame difficulty.
 - **Blacktop Online**: create a room and share the 4-letter code or invite link. Friends join from their own devices and pick **Home** or **Away**. AI fills empty spots, so co-op vs AI, 1v1 with AI teammates, and full 3v3 humans all work. The host sets the rules and starts once everyone is ready.
 - **MyPLAYER**: jumps to the builder.
-- **Settings**: sound, camera (Broadcast / Close) and player name tags.
+- **Settings**: sound, camera (Broadcast / Close), player name tags, graphics quality, **touch controls (Auto / On / Off)**, crowd ambience, and a button to replay the intro trailer.
 
 Pick any of your saved builds or one of 8 preset players from the profile button. **Create New** opens the builder.
 

@@ -89,6 +89,7 @@ test('dribble move keys trigger moves, switch hands and can shake defenders', as
     while (u.state === 'dmove') g.step(1 / 60, idle);
   }
   // a guarding defender is harder to beat than a flat-footed one
+  u.build.attrs.ballHandle = 62; u.build.badges = {};
   let shakenFlat = 0, shakenGuard = 0;
   for (let i = 0; i < 400; i++) {
     for (const guarding of [false, true]) {

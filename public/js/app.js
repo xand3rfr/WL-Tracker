@@ -852,3 +852,15 @@ function boot() {
 }
 
 boot();
+
+// first visit (or ?intro): the trailer plays before character creation
+(async () => {
+  let seen = false;
+  try { seen = localStorage.getItem('bl_intro_seen') === '1'; } catch { /* storage unavailable */ }
+  if ((seen || location.hash.startsWith('#b=')) && !new URLSearchParams(location.search).has('intro')) return;
+  const { playTrailer } = await import('./trailer.js');
+  stage?.pause();
+  await playTrailer({ quality: window.matchMedia('(pointer: coarse)').matches ? 'low' : 'medium' });
+  try { localStorage.setItem('bl_intro_seen', '1'); } catch { /* storage unavailable */ }
+  stage?.resume();
+})();

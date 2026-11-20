@@ -1,6 +1,7 @@
 import * as THREE from '../vendor/three.module.min.js';
 import { BODY_TYPES, HAIR_COLORS, EYE_COLORS, JERSEY_COLORS, SHOE_COLORS, ANIMATIONS } from './data.js';
 import { idealWeight } from './build.js';
+import { tex as assetTex } from './game/assets.js';
 
 const TAU = Math.PI * 2;
 const BALL_R = 0.12;
@@ -126,6 +127,11 @@ function shortsTexture(color, trim) {
   return tex(c);
 }
 
+// pebbled leather grain shared by every ball
+export function ballSurface() {
+  return { roughness: 0.82, roughnessMap: assetTex('leather_rough.jpg', { repeat: [3, 2] }), normalMap: assetTex('leather_normal.jpg', { repeat: [3, 2] }), normalScale: new THREE.Vector2(1.3, 1.3) };
+}
+
 function ballTexture() {
   const [c, ctx] = canvas(512, 256);
   ctx.fillStyle = '#d4651f'; ctx.fillRect(0, 0, 512, 256);
@@ -210,16 +216,20 @@ function buildCharacter(build, ballTex) {
     return g;
   };
 
-  const skinMat = M({ color: skin, roughness: 0.55, metalness: 0 });
-  const skinInk = (on, seed) => (on ? M({ map: skinTexture(skin, true, seed), roughness: 0.55 }) : skinMat);
+  const MP = (opts) => { const m = new THREE.MeshPhysicalMaterial(opts); disposables.push(m); if (opts.map) disposables.push(opts.map); return m; };
+  const skinOpts = { roughness: 0.46, sheen: 0.35, sheenRoughness: 0.55, sheenColor: new THREE.Color(skin).lerp(new THREE.Color('#ffd9c4'), 0.5), clearcoat: 0.06, clearcoatRoughness: 0.6 };
+  const skinMat = MP({ color: skin, ...skinOpts });
+  const skinInk = (on, seed) => (on ? MP({ map: skinTexture(skin, true, seed), ...skinOpts }) : skinMat);
+  const fabric = { normalMap: assetTex('fabric_normal.jpg', { repeat: [14, 8] }), normalScale: new THREE.Vector2(0.55, 0.55), sheen: 0.25, sheenRoughness: 0.8, sheenColor: new THREE.Color(jersey) };
   const hairMat = M({ color: hair, roughness: 0.9 });
-  const shortsMat = M({ map: shortsTexture(jersey, trim), roughness: 0.75 });
+  const shortsMat = MP({ map: shortsTexture(jersey, trim), roughness: 0.68, ...fabric });
   const sockMat = M({ color: '#f4f4f4', roughness: 0.9 });
-  const shoeMat = M({ color: shoe, roughness: 0.4 });
+  const shoeMat = MP({ color: shoe, roughness: 0.38, clearcoat: 0.6, clearcoatRoughness: 0.25 });
   const soleMat = M({ color: shoe === '#f2f2f2' ? '#d8d8d8' : '#f2f2f2', roughness: 0.6 });
-  const jerseyMat = M({
+  const jerseyMat = MP({
+    ...fabric,
     map: jerseyTexture({ color: jersey, trim, skin, number: String(identity.number || '0'), name: identity.last || '', chestInk: tats.has('Chest'), inkColor: ink }),
-    roughness: 0.7,
+    roughness: 0.62,
   });
 
   // proportions (meters)
@@ -299,7 +309,7 @@ function buildCharacter(build, ballTex) {
 
   let ball = null;
   if (ballTex) {
-    ball = new THREE.Mesh(G(new THREE.SphereGeometry(BALL_R, 36, 24)), M({ map: ballTex, roughness: 0.75 }));
+    ball = new THREE.Mesh(G(new THREE.SphereGeometry(BALL_R, 36, 24)), M({ map: ballTex, ...ballSurface() }));
     disposables.pop(); // ball texture is shared, never dispose
     ball.castShadow = true;
     root.add(ball);
