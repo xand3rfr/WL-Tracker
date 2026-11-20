@@ -71,3 +71,33 @@ test('user shot timing: a perfect release grades Excellent, a tap grades Very Ea
   g.step(1 / 60, { ...noop, shoot: false, shootReleased: true });
   assert.equal(g.events.find(e => e.type === 'release').grade, 'Very Early');
 });
+
+test('dribble move keys trigger moves, switch hands and can shake defenders', async () => {
+  const { DRIBBLE_MOVES } = await import('../public/js/game/sim.js');
+  const g = new Game({ userBuild: randomBuild(), mode: 2, target: 11, firstPoss: 0 });
+  while (g.phase !== 'live') g.step(1 / 60, null);
+  const u = g.user, idle = { mx: 0, mz: 0, shoot: false, sprint: false };
+  assert.equal(g.ball.holder, u);
+  g.step(1 / 60, { ...idle, move: 'cross' });
+  assert.equal(u.state, 'dmove');
+  assert.equal(u.hand, 'L');
+  while (u.state === 'dmove') g.step(1 / 60, idle);
+  for (const kind of Object.keys(DRIBBLE_MOVES)) {
+    u.cool = 0; u.state = 'move';
+    g.step(1 / 60, { ...idle, move: kind });
+    assert.equal(u.dm?.k, kind);
+    while (u.state === 'dmove') g.step(1 / 60, idle);
+  }
+  // a guarding defender is harder to beat than a flat-footed one
+  let shakenFlat = 0, shakenGuard = 0;
+  for (let i = 0; i < 400; i++) {
+    for (const guarding of [false, true]) {
+      const q = g.players.find(p => p.team === 1);
+      q.stumble = 0; q.guarding = guarding; q.x = u.x + Math.sin(u.facing) * 1; q.z = u.z + Math.cos(u.facing) * 1; q.y = 0;
+      g.events.length = 0;
+      g.shakeCheck(u, { k: 'cross', fx: Math.sin(u.facing), fz: Math.cos(u.facing), combo: false });
+      if (g.events.some(e => e.type === 'ankles' || e.type === 'shook')) guarding ? shakenGuard++ : shakenFlat++;
+    }
+  }
+  assert.ok(shakenFlat > shakenGuard, `flat ${shakenFlat} vs guarding ${shakenGuard}`);
+});

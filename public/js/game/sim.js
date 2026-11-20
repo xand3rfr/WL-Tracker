@@ -10,6 +10,14 @@ export const BALL_R = 0.12;
 const G = 9.8;
 const SHOT_CLOCK = 20;
 
+// dur: seconds at average handles; speed: burst m/s; bite: ankle-break power; risk: steal multiplier mid-move
+export const DRIBBLE_MOVES = {
+  cross: { label: 'Crossover', dur: 0.34, speed: 5.2, bite: 0.08, risk: 1.35 },
+  btb: { label: 'Behind the Back', dur: 0.4, speed: 4.6, bite: 0.02, risk: 0.6 },
+  spin: { label: 'Spin Move', dur: 0.52, speed: 4.4, bite: 0.06, risk: 0.3 },
+  step: { label: 'Step-Back', dur: 0.38, speed: 4.8, bite: 0.04, risk: 0.9 },
+};
+
 export const DIFFICULTY = {
   rookie: { label: 'Rookie', ovr: -9, aim: 1.7, react: 0.38, steal: 0.55, iq: 0.6 },
   pro: { label: 'Pro', ovr: -3, aim: 1.2, react: 0.26, steal: 0.8, iq: 0.8 },
@@ -72,7 +80,8 @@ function makePlayer(id, team, build, isUser) {
     h: build.body.height * 0.0254,
     x: 0, z: 0, vx: 0, vz: 0, y: 0, vy: 0, facing: Math.PI,
     want: { x: 0, z: 0, sprint: false, face: null },
-    state: 'move', st: 0, cool: 0, stumble: 0, energy: 1,
+    state: 'move', st: 0, cool: 0, stumble: 0, fallen: false, energy: 1,
+    hand: 'R', dm: null, guarding: false, spaceT: 0, lastMove: null,
     shot: null, finish: null, passT: 0, reachT: 0,
     ai: { t: rand(0, 0.3), spot: null, spotT: 0, drive: false, hold: 0, jumpAt: null, cut: 0 },
     man: null, callT: 0, gait: 0,
@@ -199,11 +208,14 @@ export class Game {
     const free = p.state === 'move' && p.stumble <= 0;
     p.want.x = input.mx; p.want.z = input.mz; p.want.sprint = input.sprint; p.want.face = null;
     if (p.state === 'jumper' && !p.shot.released && (input.shootReleased || !input.shoot)) this.releaseJumper(p, null);
-    if (!free) return;
     const b = this.ball;
     const hasBall = b.state === 'held' && b.holder === p;
+    p.guarding = !!input.guard && !hasBall;
+    if (!free) return;
     if (hasBall) {
-      if (input.shootPressed) {
+      if (input.move && DRIBBLE_MOVES[input.move] && p.cool <= 0) {
+        this.startMove(p, input.move, input.mx, input.mz);
+      } else if (input.shootPressed) {
         const d = rimDist(p.x, p.z);
         const toward = (input.mx * (COURT.rim.x - p.x) + input.mz * (COURT.rim.z - p.z)) / (d || 1);
         if (d < 1.6 || (d < 3.1 && toward > 0.3)) this.startFinish(p);
@@ -227,7 +239,74 @@ export class Game {
     const jog = 2.9 + 1.5 * r;
     const sprint = p.want.sprint && p.energy > 0.05 ? 1.38 : 1;
     const tired = p.energy < 0.25 ? 0.85 : 1;
-    return jog * sprint * tired * (p.stumble > 0 ? 0.35 : 1);
+    const stance = p.guarding ? 0.82 : 1;
+    if (p.fallen && p.stumble > 0) return 0;
+    return jog * sprint * tired * stance * (p.stumble > 0 ? 0.35 : 1);
+  }
+
+  // ---------- dribble moves ----------
+  startMove(p, kind, mx = 0, mz = 0) {
+    const def = DRIBBLE_MOVES[kind];
+    const bh = rt(p, 'ballHandle'), swb = rt(p, 'speedWithBall');
+    const style = animPreview(p.build, 'dribble').speed || 1;
+    const quick = (0.82 + 0.32 * bh) * (0.9 + 0.12 * (style - 1));
+    const f = Math.atan2(COURT.rim.x - p.x, COURT.rim.z - p.z);
+    const fx = Math.sin(f), fz = Math.cos(f), lx = Math.cos(f), lz = -Math.sin(f);
+    // which way to go: the stick's lateral push if any, otherwise toward the off hand
+    const lateral = mx * lx + mz * lz;
+    let side = Math.abs(lateral) > 0.3 ? Math.sign(lateral) : p.hand === 'R' ? 1 : -1;
+    if (kind === 'step') side = 0;
+    const sp = def.speed * (0.8 + 0.45 * swb);
+    const dm = { k: kind, d: def.dur / quick, side, from: p.hand, checked: false, fx, fz, lx, lz, sp };
+    if (kind === 'cross' || kind === 'btb') p.hand = side > 0 ? 'L' : 'R';
+    p.state = 'dmove'; p.st = 0; p.dm = dm; p.facing = f;
+    p.energy = Math.max(0, p.energy - 0.035 * (1 - badgeBoost(p, 'handles_for_days', 0.12)));
+    dm.combo = p.lastMove && p.lastMove.k !== kind && this.time - p.lastMove.t < 1.0;
+    p.lastMove = { k: kind, t: this.time };
+    this.emit('dmove', { id: p.id, k: kind, combo: dm.combo });
+  }
+
+  updateMove(p, dt) {
+    const dm = p.dm, k = clamp(p.st / dm.d, 0, 1);
+    const burst = Math.sin(Math.PI * Math.min(1, k * 1.15)) ** 0.6;
+    let dx, dz;
+    if (dm.k === 'step') { dx = -dm.fx; dz = -dm.fz; }
+    else if (dm.k === 'spin') {
+      // around the defender: sideways first, then downhill
+      const a = k * Math.PI * 0.5;
+      dx = dm.lx * dm.side * Math.cos(a) + dm.fx * Math.sin(a); dz = dm.lz * dm.side * Math.cos(a) + dm.fz * Math.sin(a);
+    } else {
+      const fwd = dm.k === 'btb' ? 0.45 : 0.25;
+      dx = dm.lx * dm.side + dm.fx * fwd; dz = dm.lz * dm.side + dm.fz * fwd;
+    }
+    const m = hyp(dx, dz) || 1;
+    p.vx = (dx / m) * dm.sp * burst; p.vz = (dz / m) * dm.sp * burst;
+    p.x += p.vx * dt; p.z += p.vz * dt;
+    p.gait += hyp(p.vx, p.vz) * dt;
+    if (!dm.checked && k >= 0.55) { dm.checked = true; this.shakeCheck(p, dm); }
+    if (k >= 1) {
+      p.state = 'move'; p.st = 0; p.dm = null; p.cool = 0.16;
+      if (dm.k === 'step') p.spaceT = 0.8;
+    }
+  }
+
+  shakeCheck(p, dm) {
+    const bh = rt(p, 'ballHandle');
+    for (const q of this.players) {
+      if (q.team === p.team || q.stumble > 0 || q.y > 0.1) continue;
+      const dx = q.x - p.x, dz = q.z - p.z, d = hyp(dx, dz);
+      if (d > 1.9 || (dx * dm.fx + dz * dm.fz) / (d || 1) < -0.3) continue;
+      const resist = 0.5 * rt(q, 'perimeterDefense') + 0.25 * rt(q, 'agility') + (q.guarding ? 0.15 : 0) + badgeBoost(q, 'on_ball_menace', 0.03);
+      const power = 0.22 + 0.62 * bh + DRIBBLE_MOVES[dm.k].bite + badgeBoost(p, 'ankle_assassin', 0.06) + (dm.combo ? 0.1 : 0) - (d > 1.3 ? 0.15 : 0);
+      const r = power - resist + rand(-0.25, 0.25);
+      if (r > 0.58) {
+        q.stumble = 1.3; q.fallen = true; q.vx = q.vz = 0; q.state = 'move';
+        this.emit('ankles', { id: q.id, by: p.id });
+      } else if (r > 0.22) {
+        q.stumble = 0.45;
+        this.emit('shook', { id: q.id, by: p.id });
+      }
+    }
   }
 
   updatePlayers(dt) {
@@ -235,12 +314,18 @@ export class Game {
       p.st += dt;
       p.cool = Math.max(0, p.cool - dt);
       p.stumble = Math.max(0, p.stumble - dt);
+      if (p.stumble <= 0) p.fallen = false;
+      p.spaceT = Math.max(0, p.spaceT - dt);
       p.callT = Math.max(0, p.callT - dt);
       const sprinting = p.want.sprint && hyp(p.vx, p.vz) > 2;
       p.energy = clamp(p.energy + dt * (sprinting ? -0.11 * (1 - 0.55 * rt(p, 'stamina')) : 0.07), 0, 1);
 
       if (p.state === 'jumper') this.updateJumper(p, dt);
       else if (p.state === 'finish') this.updateFinish(p, dt);
+      else if (p.state === 'dmove') {
+        if (!(this.ball.state === 'held' && this.ball.holder === p)) { p.state = 'move'; p.st = 0; p.dm = null; }
+        else this.updateMove(p, dt);
+      }
       else if (p.state === 'jump') {
         p.vy -= G * dt; p.y += p.vy * dt;
         p.x += p.vx * dt; p.z += p.vz * dt; p.vx *= 0.985; p.vz *= 0.985;
@@ -319,9 +404,12 @@ export class Game {
       let c = clamp((2.5 - d) / 1.8, 0, 1) * (0.45 + 0.55 * clamp(front + 0.2, 0, 1)) * (0.55 + 0.45 * defR);
       c *= clamp(1 + (q.h - p.h) * 1.4, 0.7, 1.35);
       if (q.state === 'jump') c *= 1.3;
+      if (q.guarding) c *= 1.2;
+      if (q.stumble > 0) c *= q.fallen ? 0 : 0.4;
       c *= 1 + badgeBoost(q, 'challenger', 0.04);
       best = Math.max(best, c);
     }
+    if (p.spaceT > 0) best *= 0.45;
     return clamp(best, 0, 1);
   }
   shotTiming(p) {
@@ -551,6 +639,8 @@ export class Game {
     let ps = 0.1 + 0.3 * rt(p, 'steal') - 0.2 * rt(h, 'ballHandle');
     ps *= (1 + badgeBoost(p, 'glove', 0.1)) * (1 - badgeBoost(h, 'unpluckable', 0.08)) * (1 - badgeBoost(h, 'strong_handle', 0.03));
     if (h.state === 'jumper' || h.state === 'finish') ps *= 0.4;
+    if (h.state === 'dmove') ps *= DRIBBLE_MOVES[h.dm.k].risk;
+    if (p.guarding) ps *= 1.15;
     if (Math.random() < clamp(ps, 0.02, 0.5)) {
       p.stats.stl++; h.stats.to++;
       const ang = Math.atan2(p.x - h.x, p.z - h.z) + rand(-0.6, 0.6);
@@ -690,7 +780,8 @@ export class Game {
     const b = this.ball;
     p.ai.t -= dt;
     p.want.sprint = false; p.want.face = null;
-    if (p.state === 'jumper' || p.state === 'finish' || p.state === 'jump') return;
+    p.guarding = false;
+    if (p.state === 'jumper' || p.state === 'finish' || p.state === 'jump' || p.state === 'dmove') return;
     const iq = this.aiTuned(p) ? this.diff.iq : 0.9;
     if (b.state === 'loose' || (b.state === 'air' && b.flight.kind === 'shot')) return this.aiChase(p);
     const offense = (b.state === 'held' ? b.holder.team : b.flight.passer.team) === p.team;
@@ -751,6 +842,15 @@ export class Game {
       return;
     }
     if (ai.t > 0 && !ai.drive) return;
+    // AI handlers break down a tight defender with a move of their own
+    const tight = this.laneDefender(p, COURT.rim.x, COURT.rim.z, 0.9);
+    if (tight && tight.d < 1.5 && p.cool <= 0 && Math.random() < 0.22 * rt(p, 'ballHandle') * iq) {
+      const kinds = Object.keys(DRIBBLE_MOVES);
+      this.startMove(p, kinds[Math.floor(Math.random() * kinds.length)]);
+      ai.drive = Math.random() < 0.55; ai.t = 0.2;
+      return;
+    }
+    if (p.spaceT > 0 && Math.random() < 0.45) { this.aiShoot(p); return; }
     if (ai.drive) {
       if (d < 2.7) { ai.drive = false; this.startFinish(p); return; }
       const blockedLane = this.laneDefender(p, COURT.rim.x, COURT.rim.z, 0.7);
@@ -861,6 +961,7 @@ export class Game {
       tx = m.x + (rx / rd) * sag + (bx / bd) * 0.6; tz = m.z + (rz / rd) * sag + (bz / bd) * 0.6;
     }
     p.want.face = Math.atan2(m.x - p.x, m.z - p.z);
+    p.guarding = onBall && hyp(m.x - p.x, m.z - p.z) < 2.2;
     this.moveTo(p, tx, tz, hyp(tx - p.x, tz - p.z) > 3);
     // contests and rim protection
     const shooter = this.players.find(q => q.team !== p.team && (q.state === 'jumper' && !q.shot.released || q.state === 'finish' && !q.finish.released));
@@ -889,6 +990,7 @@ export class Game {
         p.shot ? { Tm: r(p.shot.Tm), i: r(p.shot.ideal), w: r(p.shot.window), rl: p.shot.released, rt: r(p.shot.relT), g: p.shot.grade || null, a: p.shot.anim } : null,
         p.finish ? { k: p.finish.kind, d: p.finish.dur, r: p.finish.rel, rl: p.finish.released, a: p.finish.anim } : null,
         p.stats,
+        p.hand, p.dm ? { k: p.dm.k, d: r(p.dm.d), s: p.dm.side, f: p.dm.from } : null, p.guarding ? 1 : 0, r(p.stumble), p.fallen ? 1 : 0,
       ]),
       b: [b.state, b.holder ? b.holder.id : -1, r(b.x), r(b.y), r(b.z), r(b.vx), r(b.vy), r(b.vz), b.flight?.kind || null],
       e: [],
@@ -901,7 +1003,9 @@ export class Game {
     s.p.forEach((a, i) => {
       const p = this.players[i];
       if (!p) return;
-      const [x, z, y, vx, vz, f, state, st, energy, gait, human, shot, fin, stats] = a;
+      const [x, z, y, vx, vz, f, state, st, energy, gait, human, shot, fin, stats, hand, dm, guarding, stumble, fallen] = a;
+      p.hand = hand || 'R'; p.guarding = !!guarding; p.stumble = stumble || 0; p.fallen = !!fallen;
+      p.dm = dm ? { k: dm.k, d: dm.d, side: dm.s, from: dm.f } : null;
       // small corrections blend, big ones snap
       const blend = hyp(p.x - x, p.z - z) < 0.8 ? 0.5 : 1;
       p.x += (x - p.x) * blend; p.z += (z - p.z) * blend;
@@ -924,7 +1028,8 @@ export class Game {
     if (this.phase === 'live' && this.ball.state === 'held') this.shotClock = Math.max(0, this.shotClock - dt);
     for (const p of this.players) {
       p.st += dt;
-      if (p.state === 'move' || p.state === 'pass' || p.state === 'reach') {
+      p.stumble = Math.max(0, p.stumble - dt);
+      if (p.state === 'move' || p.state === 'pass' || p.state === 'reach' || p.state === 'dmove') {
         p.x += p.vx * dt; p.z += p.vz * dt; p.gait += hyp(p.vx, p.vz) * dt;
       }
     }

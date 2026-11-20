@@ -1,14 +1,15 @@
 const KEYMAP = {
   up: ['KeyW', 'ArrowUp'], down: ['KeyS', 'ArrowDown'], left: ['KeyA', 'ArrowLeft'], right: ['KeyD', 'ArrowRight'],
-  sprint: ['ShiftLeft', 'ShiftRight'], shoot: ['Space', 'KeyJ'], pass: ['KeyE', 'KeyK'], pause: ['Escape', 'KeyP'],
+  sprint: ['ShiftLeft', 'ShiftRight'], shoot: ['KeyE', 'KeyJ'], pass: ['KeyF', 'KeyK'], guard: ['KeyG'], pause: ['Escape', 'KeyP'],
 };
+const MOVE_KEYS = { KeyZ: 'cross', KeyX: 'btb', KeyC: 'spin', KeyV: 'step' };
 const BLOCK_DEFAULT = new Set(['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
 
 export class Input {
   constructor(touchRoot) {
     this.keys = new Set();
-    this.latch = { shootDown: false, shootUp: false, pass: false, pause: false };
-    this.touch = { x: 0, y: 0, shoot: false, sprint: false };
+    this.latch = { shootDown: false, shootUp: false, pass: false, pause: false, move: null };
+    this.touch = { x: 0, y: 0, shoot: false, sprint: false, guard: false };
     this.enabled = true;
     this._down = e => {
       if (!this.enabled || e.repeat && !BLOCK_DEFAULT.has(e.code)) return;
@@ -18,6 +19,7 @@ export class Input {
       if (KEYMAP.shoot.includes(e.code)) this.latch.shootDown = true;
       if (KEYMAP.pass.includes(e.code)) this.latch.pass = true;
       if (KEYMAP.pause.includes(e.code)) this.latch.pause = true;
+      if (MOVE_KEYS[e.code]) this.latch.move = MOVE_KEYS[e.code];
     };
     this._up = e => {
       this.keys.delete(e.code);
@@ -58,6 +60,8 @@ export class Input {
     btn('[data-btn=shoot]', () => { this.touch.shoot = true; this.latch.shootDown = true; }, () => { this.touch.shoot = false; this.latch.shootUp = true; });
     btn('[data-btn=pass]', () => { this.latch.pass = true; });
     btn('[data-btn=sprint]', () => { this.touch.sprintBtn = true; }, () => { this.touch.sprintBtn = false; });
+    btn('[data-btn=guard]', () => { this.touch.guard = true; }, () => { this.touch.guard = false; });
+    for (const kind of Object.values(MOVE_KEYS)) btn(`[data-move=${kind}]`, () => { this.latch.move = kind; });
   }
 
   has(name) { return KEYMAP[name].some(k => this.keys.has(k)); }
@@ -74,8 +78,9 @@ export class Input {
       sprint: this.has('sprint') || this.touch.sprint || !!this.touch.sprintBtn,
       shootPressed: this.latch.shootDown, shootReleased: this.latch.shootUp && !shoot,
       passPressed: this.latch.pass, pausePressed: this.latch.pause,
+      move: this.latch.move, guard: this.has('guard') || this.touch.guard,
     };
-    this.latch = { shootDown: false, shootUp: false, pass: false, pause: false };
+    this.latch = { shootDown: false, shootUp: false, pass: false, pause: false, move: null };
     return out;
   }
 
@@ -122,4 +127,6 @@ export class Sfx {
   whistle() { this.tone(2100, 0.35, 'sine', 0.12, 80); }
   cheer() { this.noise(1.1, 0.12, 1200, 0.4); }
   steal() { this.noise(0.12, 0.25, 2200, 1.5); }
+  squeak() { this.tone(1900 + Math.random() * 500, 0.07, 'triangle', 0.06, 400); }
+  ooh() { this.noise(1.4, 0.16, 700, 0.5); this.tone(220, 0.6, 'sine', 0.05, -60); }
 }

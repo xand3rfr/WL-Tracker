@@ -40,11 +40,20 @@ How a game plays:
 | Menus | Arrows, Enter, Esc | Tap |
 | Move | WASD / arrows | Left stick |
 | Sprint | Shift | Push the stick to the edge, or Sprint |
-| Shoot (hold & release) / layup / dunk | Space | Shoot |
-| Pass · call for the ball | E | Pass |
-| Contest / block (defense) | Space | Block |
-| Steal (defense) | E | Steal |
+| Shoot (hold & release) / layup / dunk | E | Shoot |
+| Pass · call for the ball | F | Pass |
+| Crossover | Z | Cross |
+| Behind the back | X | BTB |
+| Spin move | C | Spin |
+| Step-back (opens up a jumper) | V | Step |
+| Contest / block (defense) | E | Block |
+| Steal (defense) | F | Steal |
+| Defensive stance (hold) | G | Guard |
 | Pause | Esc | Pause button |
+
+**Dribble moves:** quicker and nastier with a higher Ball Handle, Speed With Ball, a better dribble style and the Ankle Assassin badge. A good move can shake a defender (they stumble) or break their ankles (they hit the floor). Chaining two different moves quickly gives a combo bonus. Crossovers are the easiest to steal and spins the hardest. A step-back gives you about a second of extra space for a jumper. AI ball handlers use the moves too.
+
+**Guard (G):** a low stance with quicker slides, tougher contests and better resistance to ankle-breakers, but slower top speed.
 
 ### How online play works
 

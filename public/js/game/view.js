@@ -153,13 +153,58 @@ const DEF_STANCE = P({ root: [0, -0.12, 0], spine: [0.28, 0, 0], ...sym('hip', [
 const JUMP_UP = P({ ...sym('shoulder', [-3.0, 0, 0.18]), ...sym('elbow', [-0.2, 0, 0]), ...sym('hip', [-0.25, 0, 0.05]), ...sym('knee', [0.5, 0, 0]), ...sym('ankle', [0.45, 0, 0]), neck: [-0.35, 0, 0] });
 const REACH = P({ spine: [0.4, 0, 0], shoulderR: [-1.45, 0.2, -0.15], elbowR: [-0.15, 0, 0], shoulderL: [-0.4, 0, 0.5], elbowL: [-0.6, 0, 0], ...sym('hip', [-0.5, 0, 0.1]), ...sym('knee', [0.7, 0, 0]), root: [0, -0.08, 0] });
 
+const GUARD = P({ root: [0, -0.2, 0], spine: [0.36, 0, 0], ...sym('hip', [-0.75, 0, 0.26]), ...sym('knee', [1.25, 0, 0]), ...sym('ankle', [-0.5, 0, 0]),
+  ...sym('shoulder', [-0.8, 0, 1.15]), ...sym('elbow', [-0.35, 0, 0]) });
+const FALLEN = P({ root: [0, -0.62, 0], spine: [-0.75, 0, 0.2], neck: [0.3, 0, 0], ...sym('hip', [-1.35, 0, 0.3]), ...sym('knee', [0.45, 0, 0]),
+  ...sym('shoulder', [-1.2, 0, 0.9]), ...sym('elbow', [-0.3, 0, 0]) });
+const SHOOK = P(DEF_STANCE, { root: [0, -0.05, 0], spine: [0.1, 0, 0.35], shoulderL: [-1.6, 0, 1.4], shoulderR: [-0.3, 0, -0.4], hipL: [-0.2, 0, 0.45], kneeL: [0.4, 0, 0] });
+const DRIB_BASE = P({ root: [0, -0.15, 0], spine: [0.4, 0, 0], ...sym('hip', [-0.6, 0, 0.22]), ...sym('knee', [1.05, 0, 0]), ...sym('ankle', [-0.45, 0, 0]) });
+const ease = t => t * t * (3 - 2 * t);
+
+function mirrorArms(pose) {
+  for (const j of ['shoulder', 'elbow', 'wrist']) {
+    const l = pose[j + 'L'], r = pose[j + 'R'];
+    pose[j + 'L'] = r ? [r[0], -r[1], -r[2]] : undefined;
+    pose[j + 'R'] = l ? [l[0], -l[1], -l[2]] : undefined;
+  }
+  return pose;
+}
+
+// body language for each dribble move; k runs 0..1 through the move
+function dribbleMovePose(p, k) {
+  const dm = p.dm, side = dm.side || 0, arc = Math.sin(Math.PI * k);
+  const pose = P(DRIB_BASE);
+  pose.spine = [0.4 - (dm.k === 'step' ? 0.45 * arc : 0), dm.k === 'btb' ? -0.4 * arc * (dm.from === 'R' ? 1 : -1) : 0, -side * 0.3 * arc];
+  // push off the outside leg toward the new direction
+  if (side > 0) { pose.hipR = [-0.4, 0, -0.55 * arc]; pose.kneeR = [0.5, 0, 0]; }
+  if (side < 0) { pose.hipL = [-0.4, 0, 0.55 * arc]; pose.kneeL = [0.5, 0, 0]; }
+  if (dm.k === 'step') { pose.hipL = [-0.9 * arc, 0, 0.2]; pose.hipR = [-0.2, 0, -0.2]; pose.kneeL = [1.2, 0, 0]; }
+  const fromR = dm.from === 'R';
+  const low = P({ shoulderR: [-0.5, 0, -0.38], elbowR: [-0.75, 0, 0], wristR: [-0.3, 0, 0], shoulderL: [-0.5, 0, 0.38], elbowL: [-0.75, 0, 0], wristL: [-0.3, 0, 0] });
+  Object.assign(pose, low);
+  if (dm.k === 'btb') {
+    const s = fromR ? 'R' : 'L', sx = fromR ? -1 : 1;
+    pose['shoulder' + s] = [0.7 * arc - 0.2, 0, sx * 0.55]; pose['elbow' + s] = [-0.9 - 0.6 * arc, sx * 0.6 * arc, 0];
+  }
+  if (dm.k === 'spin') {
+    pose.shoulderR = [-0.55, 0, -0.18]; pose.elbowR = [-1.45, 0, 0]; pose.shoulderL = [-0.55, 0, 0.18]; pose.elbowL = [-1.45, 0, 0];
+    pose.spine = [0.3, 0, 0];
+  }
+  if (dm.k === 'cross') {
+    const s = fromR ? 'R' : 'L', sx = fromR ? -1 : 1;
+    pose['shoulder' + s] = [-0.6, 0, sx * (0.38 - 0.5 * arc)]; pose['elbow' + s] = [-0.7 - 0.3 * arc, 0, 0];
+  }
+  return pose;
+}
+
 function locomotion(p, base, hasBall, defense, time) {
   const speed = Math.hypot(p.vx, p.vz);
   const k = clamp(speed / 4.6, 0, 1);
+  const guard = defense && p.guarding;
   const stride = 1.25 * (p.h / 1.95) * (defense ? 0.7 : 1);
   const ph = (p.gait / stride) * Math.PI;
   const s = Math.sin(ph), c = Math.cos(ph);
-  const pose = defense ? P(DEF_STANCE) : hasBall ? P(STAND) : P(STAND);
+  const pose = defense ? P(guard ? GUARD : DEF_STANCE) : P(STAND);
   const amp = defense ? 0.35 : 0.85;
   pose.hipL = [(pose.hipL?.[0] || 0) - amp * k * s, 0, pose.hipL?.[2] || 0.03];
   pose.hipR = [(pose.hipR?.[0] || 0) + amp * k * s, 0, pose.hipR?.[2] || -0.03];
@@ -171,7 +216,8 @@ function locomotion(p, base, hasBall, defense, time) {
     pose.shoulderL = [0.55 * k * s + 0.05, 0, 0.12]; pose.shoulderR = [-0.55 * k * s + 0.05, 0, -0.12];
     pose.elbowL = [-0.25 - 0.6 * k, 0, 0]; pose.elbowR = [-0.25 - 0.6 * k, 0, 0];
   } else {
-    pose.shoulderL = [-0.45, 0, 0.95 + 0.08 * Math.sin(time * 5)]; pose.shoulderR = [-0.45, 0, -0.95 - 0.08 * Math.sin(time * 5 + 1)];
+    const ax = guard ? -0.8 : -0.45, az = guard ? 1.15 : 0.95;
+    pose.shoulderL = [ax, 0, az + 0.08 * Math.sin(time * 5)]; pose.shoulderR = [ax, 0, -az - 0.08 * Math.sin(time * 5 + 1)];
   }
   if (hasBall) {
     const dk = 0.5 + 0.5 * k;
@@ -180,6 +226,7 @@ function locomotion(p, base, hasBall, defense, time) {
     pose.elbowR = [-0.55 - 0.2 * Math.sin(time * TAU * (2.2 + speed * 0.3)), 0, 0];
     pose.wristR = [-0.2, 0, 0];
     pose.shoulderL = [-0.55, 0, 0.32]; pose.elbowL = [-1.15, -0.2, 0];
+    if (p.hand === 'L') mirrorArms(pose);
   }
   return pose;
 }
@@ -275,7 +322,10 @@ export class CourtView {
       anchor = f.released ? null : f.kind === 'dunk' ? (f.anim?.twoHand ? 'over' : u > 0.3 ? 'R' : 'both') : u > 0.45 ? 'tipR' : 'both';
     } else {
       ch.shotClip = null; ch.finClip = null;
-      if (p.state === 'jump') pose = P(JUMP_UP);
+      if (p.state === 'dmove' && p.dm && hasBall) { pose = dribbleMovePose(p, clamp(p.st / p.dm.d, 0, 1)); anchor = 'dmove'; }
+      else if (p.stumble > 0 && p.fallen) pose = P(FALLEN);
+      else if (p.stumble > 0 && p.state === 'move' && !hasBall) pose = P(SHOOK);
+      else if (p.state === 'jump') pose = P(JUMP_UP);
       else if (p.state === 'reach') pose = P(REACH);
       else if (p.state === 'pass') {
         ch.passClip = ch.passClip || makeClip('pass', {}, p.h);
@@ -299,6 +349,11 @@ export class CourtView {
       const { c, ring, arrow } = ch;
       c.root.position.set(p.x, p.y, p.z);
       c.root.rotation.y = p.facing;
+      if (p.state === 'dmove' && p.dm) {
+        const k = clamp(p.st / p.dm.d, 0, 1);
+        if (p.dm.k === 'spin') c.root.rotation.y += (p.dm.side || 1) * TAU * ease(k);
+        if (p.dm.k === 'step') c.root.position.y += 0.12 * Math.sin(Math.PI * k);
+      }
       applyPose(c, ch.pose);
       c.root.updateMatrixWorld(true);
       ch.anchor = anchor;
@@ -315,12 +370,26 @@ export class CourtView {
         const p = b.holder;
         const freq = 2.0 + Math.hypot(p.vx, p.vz) * 0.25;
         const ph = (time * freq) % 1;
-        const hand = anchorLocal(ch.c, 'R');
-        const floor = new THREE.Vector3(hand.x - 0.05, BALL_R, hand.z + 0.25 + Math.hypot(p.vx, p.vz) * 0.08);
+        const hand = anchorLocal(ch.c, p.hand === 'L' ? 'L' : 'R');
+        const floor = new THREE.Vector3(hand.x * 0.9, BALL_R, hand.z + 0.25 + Math.hypot(p.vx, p.vz) * 0.08);
         const t = ph < 0.5 ? ph * 2 : 2 - ph * 2;
         local = hand.clone().lerp(floor, t * t * (3 - 2 * t) * 0.6 + t * 0.4);
         if (ch.lastPh != null && ph < ch.lastPh) this.onDribble?.();
         ch.lastPh = ph;
+      } else if (ch.anchor === 'dmove') {
+        const p = b.holder, dm = p.dm, k = clamp(p.st / dm.d, 0, 1);
+        const from = anchorLocal(ch.c, dm.from === 'L' ? 'L' : 'R'), to = anchorLocal(ch.c, p.hand === 'L' ? 'L' : 'R');
+        const lerp3 = (a, c2, t) => a.clone().lerp(c2, ease(clamp(t, 0, 1)));
+        if (dm.k === 'cross') {
+          const mid = new THREE.Vector3(0, BALL_R, 0.42);
+          local = k < 0.5 ? lerp3(from, mid, k * 2) : lerp3(mid, to, k * 2 - 1);
+        } else if (dm.k === 'btb') {
+          const behind = new THREE.Vector3(0, 0.55, -0.32), bounce = new THREE.Vector3(to.x, BALL_R, 0.2);
+          local = k < 0.45 ? lerp3(from, behind, k / 0.45) : k < 0.75 ? lerp3(behind, bounce, (k - 0.45) / 0.3) : lerp3(bounce, to, (k - 0.75) / 0.25);
+        } else if (dm.k === 'step') {
+          const floor = new THREE.Vector3(from.x, BALL_R, 0.25);
+          local = k < 0.5 ? lerp3(from, floor, k * 2) : lerp3(floor, from, k * 2 - 1);
+        } else local = from;
       } else local = anchorLocal(ch.c, ch.anchor || 'both');
       const w = ch.c.root.localToWorld(local);
       bm.position.lerp(w, bm.userData.snap ? 1 : 0.6);

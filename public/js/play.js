@@ -16,6 +16,7 @@ const store = {
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* storage unavailable */ } },
 };
 const STEP = 1 / 60;
+const MOVES = ['cross', 'btb', 'spin', 'step'];
 const SNAP_EVERY = 0.05;
 const fullName = b => `${b.identity.first} ${b.identity.last}`.trim() || 'Unnamed';
 const ARROW_L = '<svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>';
@@ -328,7 +329,7 @@ function runGame({ game, localId, online, host, jerseys }) {
   $('#pauseNote').textContent = online ? 'Online games keep running while this menu is open.' : '';
   $('#tags').innerHTML = '';
   for (const k of Object.keys(remote)) delete remote[k];
-  window.__game = game;
+  window.__game = game; window.__view = view;
   if (online && host) ensureTicker();
   last = performance.now(); acc = 0; pending = null;
   banner(game.poss === me.team ? 'Your Ball' : 'Their Ball', 'Check');
@@ -362,6 +363,7 @@ function onRemoteInput(from, i) {
   remote[from] = {
     mx: clamp(+i.mx || 0, -1, 1), mz: clamp(+i.mz || 0, -1, 1), sprint: !!i.sprint, shoot: !!i.shoot,
     shootPressed: !!(prev.shootPressed || i.sp), shootReleased: !!(prev.shootReleased || i.sr), passPressed: !!(prev.passPressed || i.pp),
+    move: MOVES.includes(i.mv) ? i.mv : prev.move || null, guard: !!i.g,
   };
 }
 function onSnapshot(s) {
@@ -397,13 +399,13 @@ function tick(now) {
   if (G.host) {
     if (!G.paused || G.online) {
       const mine = G.paused ? { mx: 0, mz: 0, shoot: false, sprint: false } : inp;
-      pending = pending ? { ...mine, shootPressed: pending.shootPressed || mine.shootPressed, passPressed: pending.passPressed || mine.passPressed, shootReleased: pending.shootReleased || mine.shootReleased } : mine;
+      pending = pending ? { ...mine, shootPressed: pending.shootPressed || mine.shootPressed, passPressed: pending.passPressed || mine.passPressed, shootReleased: pending.shootReleased || mine.shootReleased, move: pending.move || mine.move } : mine;
       acc += dt;
       while (acc >= STEP) {
         const inputs = { [localKey]: pending, ...remote };
         g.step(STEP, inputs);
-        pending = { ...pending, shootPressed: false, passPressed: false, shootReleased: false };
-        for (const k of Object.keys(remote)) remote[k] = { ...remote[k], shootPressed: false, passPressed: false, shootReleased: false };
+        pending = { ...pending, shootPressed: false, passPressed: false, shootReleased: false, move: null };
+        for (const k of Object.keys(remote)) remote[k] = { ...remote[k], shootPressed: false, passPressed: false, shootReleased: false, move: null };
         acc -= STEP;
       }
       const evs = g.events.splice(0);
@@ -420,10 +422,10 @@ function tick(now) {
     }
   } else {
     g.extrapolate(dt);
-    const pkt = { mx: +inp.mx.toFixed(2), mz: +inp.mz.toFixed(2), sprint: inp.sprint, shoot: inp.shoot, sp: inp.shootPressed, sr: inp.shootReleased, pp: inp.passPressed };
+    const pkt = { mx: +inp.mx.toFixed(2), mz: +inp.mz.toFixed(2), sprint: inp.sprint, shoot: inp.shoot, sp: inp.shootPressed, sr: inp.shootReleased, pp: inp.passPressed, mv: inp.move || 0, g: inp.guard ? 1 : 0 };
     G.sendT += dt;
     const ls = G.lastSent;
-    const changed = !ls || pkt.sp || pkt.sr || pkt.pp || ls.mx !== pkt.mx || ls.mz !== pkt.mz || ls.sprint !== pkt.sprint || ls.shoot !== pkt.shoot;
+    const changed = !ls || pkt.sp || pkt.sr || pkt.pp || pkt.mv || ls.g !== pkt.g || ls.mx !== pkt.mx || ls.mz !== pkt.mz || ls.sprint !== pkt.sprint || ls.shoot !== pkt.shoot;
     if (changed || G.sendT > 0.1) { net?.send({ t: 'in', i: pkt }); G.lastSent = pkt; G.sendT = 0; }
   }
   return dt;
@@ -472,6 +474,9 @@ function handleEvents(events) {
       case 'airball': banner('Airball', pname(e.id), mine(g.players[e.id].team)); break;
       case 'rim': sfx.rim(); break;
       case 'bounce': if (e.v > 2) sfx.dribble(); break;
+      case 'dmove': sfx.squeak(); if (e.id === G.localId && e.combo) showGrade('Combo'); break;
+      case 'ankles': sfx.ooh(); banner('Ankles Broken!', `${pname(e.by)} on ${pname(e.id)}`, !mine(g.players[e.by].team)); break;
+      case 'shook': if (e.by === G.localId) showGrade('Shook!'); break;
       case 'check': setTimeout(() => G && banner(e.team === myTeam ? 'Your Ball' : 'Their Ball', 'Check'), 50); break;
       case 'gameover': setTimeout(showOver, 900); break;
     }
@@ -481,6 +486,11 @@ function handleEvents(events) {
 function showGrade(grade) {
   const el = $('#grade');
   el.textContent = grade;
+  if (grade === 'Combo' || grade === 'Shook!') {
+    el.className = 'grade show g-Excellent';
+    gradeUntil = performance.now() + 700;
+    return;
+  }
   el.className = 'grade show ' + (grade === 'Excellent' ? 'g-Excellent' : grade === 'Good' ? 'g-Good' : grade.startsWith('Slightly') ? 'g-bad' : 'g-worse');
   gradeUntil = performance.now() + 1100;
   meterUntil = performance.now() + 700;
@@ -521,6 +531,7 @@ function hud(now) {
     gr.style.left = pos.x + 'px'; gr.style.top = pos.y - 10 + 'px';
   } else m.classList.remove('show');
   if (now > gradeUntil) $('#grade').classList.remove('show');
+  else if (!showMeter) { const pos = G.view.toScreen(u.x, u.h + u.y + 0.35, u.z); const gr = $('#grade'); gr.style.left = pos.x + 'px'; gr.style.top = pos.y - 10 + 'px'; }
 
   // name tags over other human players
   const tags = $('#tags');
@@ -541,6 +552,7 @@ function hud(now) {
   const offense = g.poss === u.team;
   $('#tShoot').textContent = hasBall ? 'Shoot' : offense ? 'Jump' : 'Block';
   $('#tPass').textContent = hasBall ? 'Pass' : offense ? 'Call' : 'Steal';
+  document.body.dataset.ctx = hasBall ? 'ball' : offense ? 'off' : 'def';
 }
 
 function letterGrade(p, target) {

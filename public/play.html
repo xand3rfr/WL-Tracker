@@ -75,14 +75,19 @@
             <button class="btn nav" id="rerollBtn"><svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.4-5.7M4 4v5h5"/></svg><span>New Teams</span></button>
             <button class="btn primary big nav" id="startBtn"><svg viewBox="0 0 24 24"><path d="M7 4v16l13-8z"/></svg><span>Tip Off</span></button>
           </div>
-          <details class="howto"><summary>Controls</summary>
+          <details class="howto" open><summary>Controls</summary>
             <div class="ctl-grid">
               <span><kbd>W A S D</kbd></span><span>Move</span>
               <span><kbd>Shift</kbd></span><span>Sprint</span>
-              <span><kbd>Space</kbd> hold</span><span>Shoot: release in the white window. Near the rim: layup / dunk</span>
-              <span><kbd>E</kbd></span><span>Pass · call for the ball</span>
-              <span><kbd>Space</kbd> on D</span><span>Contest / block</span>
-              <span><kbd>E</kbd> on D</span><span>Steal</span>
+              <span><kbd>E</kbd> hold</span><span>Shoot: release in the white window. Near the rim: layup / dunk</span>
+              <span><kbd>F</kbd></span><span>Pass · call for the ball</span>
+              <span><kbd>Z</kbd></span><span>Crossover</span>
+              <span><kbd>X</kbd></span><span>Behind the back</span>
+              <span><kbd>C</kbd></span><span>Spin move</span>
+              <span><kbd>V</kbd></span><span>Step-back (open jumper right after)</span>
+              <span><kbd>E</kbd> on D</span><span>Contest / block</span>
+              <span><kbd>F</kbd> on D</span><span>Steal</span>
+              <span><kbd>G</kbd> hold</span><span>Defensive stance: quicker slides, tougher contests</span>
               <span><kbd>Esc</kbd></span><span>Pause</span>
             </div>
           </details>
@@ -187,10 +192,19 @@
       </div>
       <div class="touch" id="touch">
         <div class="stick" data-stick><div class="knob" data-knob></div></div>
-        <div class="tbtns">
-          <button class="tbtn pass" data-btn="pass"><span id="tPass">Pass</span></button>
-          <button class="tbtn sprint" data-btn="sprint">Sprint</button>
-          <button class="tbtn shoot" data-btn="shoot"><span id="tShoot">Shoot</span></button>
+        <div class="tright">
+          <div class="tmoves" aria-label="Dribble moves">
+            <button class="tmove" data-move="cross">Cross</button>
+            <button class="tmove" data-move="btb">BTB</button>
+            <button class="tmove" data-move="spin">Spin</button>
+            <button class="tmove" data-move="step">Step</button>
+          </div>
+          <button class="tbtn guard" data-btn="guard">Guard</button>
+          <div class="tbtns">
+            <button class="tbtn pass" data-btn="pass"><span id="tPass">Pass</span></button>
+            <button class="tbtn sprint" data-btn="sprint">Sprint</button>
+            <button class="tbtn shoot" data-btn="shoot"><span id="tShoot">Shoot</span></button>
+          </div>
         </div>
       </div>
     </div>

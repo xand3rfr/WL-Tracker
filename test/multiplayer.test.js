@@ -44,8 +44,7 @@ test('snapshots mirror the host game on a client', () => {
   for (let i = 0; i < 60 * 8; i++) { host.step(1 / 60, { a: { ...idle, mx: 0.5, mz: -0.5 } }); host.events.length = 0; }
   const snap = JSON.parse(JSON.stringify(host.snapshot()));
   assert.ok(JSON.stringify(snap).length < 6000, 'snapshot stays small');
-  client.applySnapshot(snap);
-  client.applySnapshot(snap); // second apply converges any blended positions
+  for (let i = 0; i < 12; i++) client.applySnapshot(snap); // small corrections blend in over several snapshots
   for (const [i, p] of host.players.entries()) {
     const q = client.players[i];
     assert.ok(Math.abs(p.x - q.x) < 0.01 && Math.abs(p.z - q.z) < 0.01, `player ${i} position`);
