@@ -1,0 +1,15 @@
+{
+  "name": "blacktop-legends",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Blacktop Legends: MyPLAYER - an NBA 2K-style player builder that runs on Cloudflare Workers",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "test": "node --test test/*.test.js"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
+}

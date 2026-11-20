@@ -1,219 +1,73 @@
-# Twitch Emote Tracker - Laiys Tracker
+# Blacktop Legends: MyPLAYER Builder
 
-A real-time Twitch chat tracker that detects and counts 7TV emotes, specifically tracking WW's and LL's with live leaderboards.
+An NBA 2K-style MyPLAYER creator that runs entirely in the browser and deploys as a Cloudflare Worker.
+
+Build a player from scratch: identity, body, position, attributes, badges and animations. A live 3D model you can rotate updates as you go.
 
 ## Features
 
-✦ **Real-time Chat Tracking** - Connects to any Twitch channel instantly
-✦ **7TV Emote Detection** - Automatically loads global and channel-specific 7TV emotes
-✦ **Live Statistics** - Running count of WW and LL detections
-✦ **Leaderboards** - Top users ranked by WW and LL counts
-✦ **Beautiful UI** - Dark theme optimized for streaming with Twitch colors
-✦ **Responsive Design** - Works perfectly on desktop and mobile
+- **Identity**: name, nickname, jersey number, age, country, college/hometown. The name and number show on the 3D jersey.
+- **Body & look**: height (5'7"–7'7"), weight, wingspan, body type, skin tone, 12 hairstyles, hair color, facial hair, eye color, 8 tattoo spots, jersey and shoe colors.
+- **Positions**: PG / SG / SF / PF / C. Each position weights the overall rating differently, and the buttons show what your ratings are worth at every position.
+- **22 attributes (25–99)** in 6 categories, with 2K-style rules:
+  - Height, weight, wingspan and body type set a **max cap** for every rating.
+  - Each build has a **1,650-point budget**. Higher ratings cost more per point.
+- **Overall rating** and **archetype**, recalculated live (e.g. *3-Level Scoring Threat*, *Inside-Out Playmaker*, *Defensive Anchor*, *Two-Way Sharpshooter*, *Stretch Rim Protector*).
+- **41 badges** with Bronze → Silver → Gold → Hall of Fame → Legend tiers. Badges unlock from your ratings and cost badge points, and your overall sets how many points you get. Includes Auto-Equip.
+- **Animations**: jump shot, free throw, dribble style, size-ups, layup package, up to 3 dunk packages, and passing style. Each has rating or height requirements, and each plays on the 3D model.
+- **3D preview**: drag to rotate, scroll or pinch to zoom, Full / Upper / Face cameras, and auto-rotate.
+- **Saved builds** (kept in your browser), **share links** (the whole build is encoded in the URL), **compare** any two builds with a radar chart and a stat-by-stat table, **random player** generator, and **reset**.
+- Responsive layout for phones and desktops.
 
-## Tech Stack
-
-- React 18
-- Tailwind CSS
-- Lucide Icons
-- TMI.js (Twitch Chat)
-- 7TV API
-
-## Getting Started
-
-### Prerequisites
-
-- Node.js 14+
-- npm or yarn
-
-### Local Development
-
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/yourusername/twitch-emote-tracker.git
-   cd twitch-emote-tracker
-   ```
-
-2. **Install dependencies**
-   ```bash
-   npm install
-   ```
-
-3. **Start the development server**
-   ```bash
-   npm start
-   ```
-   The app will open at `http://localhost:3000`
-
-### Building for Production
+## Run locally
 
 ```bash
-npm run build
+npm install
 ```
-
-This creates a production-optimized build in the `build/` directory.
-
-## Deployment to Vercel
-
-### Option 1: Via GitHub (Recommended)
-
-1. **Push to GitHub**
-   ```bash
-   git remote add origin https://github.com/yourusername/twitch-emote-tracker.git
-   git push -u origin main
-   ```
-
-2. **Import on Vercel**
-   - Go to [vercel.com](https://vercel.com)
-   - Click "New Project"
-   - Select "Import Git Repository"
-   - Choose your GitHub repository
-   - Click "Import"
-
-3. **Configure (Optional)**
-   - Environment Variables: None required
-   - Build Command: `npm run build`
-   - Output Directory: `build`
-
-4. **Deploy**
-   - Click "Deploy"
-   - Your site will be live in seconds!
-
-### Option 2: Direct Vercel CLI
 
 ```bash
-npm install -g vercel
-vercel
+npm run dev
 ```
 
-Follow the prompts to deploy your project.
+Then open http://localhost:8787.
 
-## Project Structure
+Any static server works too, because there is no build step:
 
-```
-twitch-emote-tracker/
-├── public/
-│   └── index.html
-├── src/
-│   ├── components/
-│   │   ├── ChatPanel.jsx
-│   │   ├── ControlsPanel.jsx
-│   │   ├── PromotionModal.jsx
-│   │   └── StatsPanel.jsx
-│   ├── app.jsx
-│   ├── index.jsx
-│   ├── index.css
-│   └── ...
-├── package.json
-├── tailwind.config.js
-├── postcss.config.js
-└── README.md
+```bash
+cd public && python3 -m http.server 8787
 ```
 
-## Component Guide
+## Deploy to Cloudflare
 
-### App.jsx
-Main component that manages:
-- Twitch connection state
-- Chat message buffer
-- Emote detection logic
-- User leaderboards
-- Component orchestration
-
-### ChatPanel.jsx
-Displays live Twitch chat with:
-- Real-time message updates
-- User color coding
-- WW/LL badge highlights
-- Auto-scrolling to latest
-
-### StatsPanel.jsx
-Shows the count boxes for:
-- WW emote occurrences
-- LL emote occurrences
-
-### ControlsPanel.jsx
-Contains:
-- Channel name input
-- Connect/Disconnect buttons
-- Reset stats button
-- Connection status indicator
-
-### PromotionModal.jsx
-Bottom popup showing:
-- Discord bot advertisement
-- Features list
-- Pricing information
-- Call-to-action links
-
-## How It Works
-
-1. **User enters Twitch channel name** and clicks Connect
-2. **App fetches the user ID** via Twitch Kraken API
-3. **7TV emotes are loaded** (global and channel-specific)
-4. **TMI.js connects** to Twitch chat
-5. **Messages are analyzed** for WW/LL emote names
-6. **Counts updated** and user leaderboards built
-7. **Live chat displayed** with highlights for tracked emotes
-
-## Emote Detection
-
-The tracker detects emotes by:
-1. Loading all 7TV emotes into a map
-2. Checking each message word against the emote names
-3. Identifying emotes containing "ww" or "ll" in the name
-4. Updating counts and leaderboards in real-time
-
-## Customization
-
-### Change Colors
-Edit the color values in:
-- `tailwind.config.js` - Extend the color palette
-- Component className attributes - Modify Tailwind color utilities
-
-### Change Tracked Emotes
-In `app.jsx`, modify the `detectEmotes()` function:
-```javascript
-if (cleanWord.toLowerCase().includes('your-emote-name')) {
-  // Track this emote
-}
+```bash
+npx wrangler login
 ```
 
-### Modify Leaderboard Size
-Change the `.slice(0, 14)` value in `updateTopUsers()` function.
+```bash
+npm run deploy
+```
 
-## Troubleshooting
+This publishes a Worker named `blacktop-legends` that serves `public/` as static assets (see `wrangler.toml`). No database or other bindings are needed.
 
-### Connection Issues
-- Verify the channel name is correct (case-insensitive)
-- Check that TMI.js is loading properly (check browser console)
-- Ensure 7TV API is accessible
+## Tests
 
-### Emotes Not Detecting
-- Check the 7TV emote names are spelled correctly
-- Verify the channel has the emotes available
-- Check browser console for API errors
+```bash
+npm test
+```
 
-### Styling Issues
-- Clear browser cache and rebuild: `npm run build`
-- Ensure Tailwind CSS is properly configured
-- Check that PostCSS is processing your CSS
+The tests cover the rules engine: caps, budget, badges, animation unlocks, sanitizing share links, and share-code round trips.
 
-## API References
+## Project layout
 
-- [Twitch Kraken API](https://dev.twitch.tv/docs/kraken) - User lookups
-- [7TV API](https://7tv.io/docs) - Emote data
-- [TMI.js](https://tmijs.com/) - Twitch chat connection
-
-## Support
-
-For issues or feature requests, please open a GitHub issue.
-
-## License
-
-MIT License - feel free to use and modify!
-
-## Credits
-
-Created for tracking 7TV emotes in Twitch chat.
-Features Discord bot promotion modal with Zenian Bot details.
+```
+public/
+  index.html          app shell
+  css/app.css         2K-style UI
+  js/data.js          attributes, caps, positions, badges, animations, appearance options
+  js/build.js         rules engine: caps, costs, overall, archetype, badges, random, share codes
+  js/player3d.js      Three.js scene, procedural player model, animation clips
+  js/app.js           UI: tabs, sliders, saving, compare, toasts
+  vendor/             Three.js r170 (MIT)
+test/                 node:test unit tests
+wrangler.toml         Cloudflare Worker config (static assets)
+```
