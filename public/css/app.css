@@ -38,6 +38,8 @@ body {
   overflow: hidden;
 }
 button, input, select { font: inherit; color: inherit; }
+a.btn { text-decoration: none; color: inherit; }
+a.btn.primary { color: #041002; }
 button { cursor: pointer; }
 svg { display: block; }
 ::selection { background: var(--neon); color: #000; }

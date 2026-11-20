@@ -840,6 +840,7 @@ function boot() {
         break;
       case 'save': saveBuild(false); break;
       case 'share': shareBuild(state.build); break;
+      case 'play': clearTimeout(saveTimer); store.set(K_CURRENT, state.build); break;
     }
   });
   if (sharedMsg) toast(sharedMsg);

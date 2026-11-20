@@ -297,11 +297,13 @@ function buildCharacter(build, ballTex) {
     sole.receiveShadow = true;
   }
 
-  // ball
-  const ball = new THREE.Mesh(G(new THREE.SphereGeometry(BALL_R, 36, 24)), M({ map: ballTex, roughness: 0.75 }));
-  disposables.pop(); // ball texture is shared, never dispose
-  ball.castShadow = true;
-  root.add(ball);
+  let ball = null;
+  if (ballTex) {
+    ball = new THREE.Mesh(G(new THREE.SphereGeometry(BALL_R, 36, 24)), M({ map: ballTex, roughness: 0.75 }));
+    disposables.pop(); // ball texture is shared, never dispose
+    ball.castShadow = true;
+    root.add(ball);
+  }
 
   const rest = {};
   for (const k of JOINTS) rest[k] = J[k].position.clone();
@@ -796,30 +798,7 @@ export class PlayerStage {
     return STAND[k] || [0, 0, 0];
   }
 
-  _anchor(a) {
-    const c = this.char, J = c.J;
-    const local = new THREE.Vector3();
-    const palm = (side) => J['wrist' + side].localToWorld(J['wrist' + side].userData.palm.clone());
-    const toLocal = v => c.root.worldToLocal(v);
-    if (a === 'R' || a === 'L') {
-      const p = toLocal(palm(a));
-      p.y -= BALL_R * 0.95;
-      return p;
-    }
-    if (a === 'tipR') {
-      const p = toLocal(palm('R'));
-      p.y += BALL_R * 0.9; p.z += 0.03;
-      return p;
-    }
-    if (a === 'both' || a === 'set' || a === 'over') {
-      const p = toLocal(palm('L')).add(toLocal(palm('R'))).multiplyScalar(0.5);
-      if (a === 'both') p.z += BALL_R * 0.55;
-      if (a === 'set' || a === 'over') p.y += BALL_R * 0.55;
-      return p;
-    }
-    if (a && a.p) return local.set(a.p[0], a.p[1], a.p[2]);
-    return null;
-  }
+  _anchor(a) { return anchorLocal(this.char, a); }
 
   _applyClip(dt) {
     const c = this.char; if (!c) return;
@@ -920,6 +899,64 @@ function wrap(a) {
   a = ((a + Math.PI) % TAU + TAU) % TAU - Math.PI;
   return a;
 }
+
+// ball position (in the character root's local space) for a named anchor
+export function anchorLocal(c, a) {
+  const J = c.J;
+  const palm = side => J['wrist' + side].localToWorld(J['wrist' + side].userData.palm.clone());
+  const toLocal = v => c.root.worldToLocal(v);
+  if (a === 'R' || a === 'L') {
+    const p = toLocal(palm(a));
+    p.y -= BALL_R * 0.95;
+    return p;
+  }
+  if (a === 'tipR') {
+    const p = toLocal(palm('R'));
+    p.y += BALL_R * 0.9; p.z += 0.03;
+    return p;
+  }
+  if (a === 'both' || a === 'set' || a === 'over') {
+    const p = toLocal(palm('L')).add(toLocal(palm('R'))).multiplyScalar(0.5);
+    if (a === 'both') p.z += BALL_R * 0.55;
+    if (a === 'set' || a === 'over') p.y += BALL_R * 0.55;
+    return p;
+  }
+  if (a && a.p) return new THREE.Vector3(a.p[0], a.p[1], a.p[2]);
+  return null;
+}
+
+// interpolated joint rotations + root offset of a clip at normalized time u
+export function samplePose(clip, u) {
+  const keys = clip.keys;
+  let i = 0;
+  while (i < keys.length - 2 && u > keys[i + 1].t) i++;
+  const A = keys[i], B = keys[Math.min(i + 1, keys.length - 1)];
+  const f = ease(THREE.MathUtils.clamp((u - A.t) / Math.max(1e-6, B.t - A.t), 0, 1));
+  const out = {};
+  for (const k of [...JOINTS, 'root']) {
+    const a = A.pose[k] || (k === 'root' ? [0, 0, 0] : STAND[k] || [0, 0, 0]);
+    const b = B.pose[k] || (k === 'root' ? [0, 0, 0] : STAND[k] || [0, 0, 0]);
+    out[k] = [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f];
+  }
+  return out;
+}
+
+export function blendPose(a, b, t) {
+  const out = {};
+  for (const k of [...JOINTS, 'root']) {
+    const x = a[k] || [0, 0, 0], y = b[k] || [0, 0, 0];
+    out[k] = [x[0] + (y[0] - x[0]) * t, x[1] + (y[1] - x[1]) * t, x[2] + (y[2] - x[2]) * t];
+  }
+  return out;
+}
+
+export function applyPose(c, pose, rootY = true) {
+  for (const k of JOINTS) { const v = pose[k] || STAND[k] || [0, 0, 0]; c.J[k].rotation.set(v[0], v[1], v[2]); }
+  const r = pose.root || [0, 0, 0];
+  c.J.hips.position.set(c.rest.hips.x + r[0], c.rest.hips.y + (rootY ? r[1] : 0), c.rest.hips.z + r[2]);
+}
+
+export { buildCharacter, makeClip, ballTexture, JOINTS, STAND, HOLD, ATHLETIC, sym, P, BALL_R, wrap };
 
 export function animPreviewParams(build, key) {
   const def = ANIMATIONS[key];
