@@ -4,7 +4,7 @@ import { RenderPass } from '../../vendor/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from '../../vendor/jsm/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from '../../vendor/jsm/postprocessing/OutputPass.js';
 import { GTAOPass } from '../../vendor/jsm/postprocessing/GTAOPass.js';
-import { buildCharacter, makeClip, samplePose, applyPose, anchorLocal, ballTexture, ballSurface, JOINTS, STAND, HOLD, sym, P, BALL_R } from '../player3d.js';
+import { buildCharacter, DETAIL, makeClip, samplePose, applyPose, anchorLocal, ballTexture, ballSurface, JOINTS, STAND, HOLD, sym, P, BALL_R } from '../player3d.js';
 import { COURT } from './sim.js';
 import { tex as T, nightEnvironment } from './assets.js';
 
@@ -215,7 +215,8 @@ function buildCourt(scene, quality) {
   const H = 3.6;
   const fence = (w, x, z, ry) => {
     const mat = fenceMat.clone();
-    for (const k of ['map', 'alphaMap', 'normalMap']) { mat[k] = fenceMat[k].clone(); mat[k].repeat.set(w / 0.9, H / 0.9); mat[k].needsUpdate = true; }
+    const rep = [Math.round(w / 0.9), Math.round(H / 0.9)], rot = Math.PI / 4;
+    mat.map = T('fence_color.jpg', { repeat: rep, srgb: true, rotation: rot }); mat.alphaMap = T('fence_alpha.jpg', { repeat: rep, rotation: rot }); mat.normalMap = T('fence_normal.jpg', { repeat: rep, rotation: rot });
     const f = new THREE.Mesh(new THREE.PlaneGeometry(w, H), mat);
     f.position.set(x, H / 2 + 0.05, z); f.rotation.y = ry; f.castShadow = true; scene.add(f);
     const rail = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, w, 8), metal);
@@ -342,32 +343,49 @@ function dribbleMovePose(p, k) {
 function locomotion(p, base, hasBall, defense, time) {
   const speed = Math.hypot(p.vx, p.vz);
   const k = clamp(speed / 4.6, 0, 1);
+  const sprint = clamp((speed - 3.8) / 2.2, 0, 1);
   const guard = defense && p.guarding;
-  const stride = 1.25 * (p.h / 1.95) * (defense ? 0.7 : 1);
+  const stride = 1.25 * (p.h / 1.95) * (defense ? 0.7 : 1 + 0.25 * sprint);
   const ph = (p.gait / stride) * Math.PI;
   const s = Math.sin(ph), c = Math.cos(ph);
   const pose = defense ? P(guard ? GUARD : DEF_STANCE) : P(STAND);
-  const amp = defense ? 0.35 : 0.85;
+  const amp = defense ? 0.35 : 0.8 + 0.25 * sprint;
   pose.hipL = [(pose.hipL?.[0] || 0) - amp * k * s, 0, pose.hipL?.[2] || 0.03];
   pose.hipR = [(pose.hipR?.[0] || 0) + amp * k * s, 0, pose.hipR?.[2] || -0.03];
-  pose.kneeL = [(pose.kneeL?.[0] || 0.05) + k * (0.35 + 0.75 * Math.max(0, c)), 0, 0];
-  pose.kneeR = [(pose.kneeR?.[0] || 0.05) + k * (0.35 + 0.75 * Math.max(0, -c)), 0, 0];
-  pose.root = [0, (pose.root?.[1] || 0) - 0.03 * k + 0.035 * k * Math.abs(s), 0];
-  pose.spine = [(pose.spine?.[0] || 0.03) + 0.16 * k, 0, 0];
+  // knee folds on the recovery swing and stays soft on contact
+  pose.kneeL = [(pose.kneeL?.[0] || 0.06) + k * (0.25 + (0.9 + 0.5 * sprint) * Math.max(0, c)), 0, 0];
+  pose.kneeR = [(pose.kneeR?.[0] || 0.06) + k * (0.25 + (0.9 + 0.5 * sprint) * Math.max(0, -c)), 0, 0];
+  // toe-off as each leg trails behind
+  pose.ankleL = [(pose.ankleL?.[0] || 0) + 0.4 * k * Math.max(0, -s), 0, 0];
+  pose.ankleR = [(pose.ankleR?.[0] || 0) + 0.4 * k * Math.max(0, s), 0, 0];
+  pose.root = [0, (pose.root?.[1] || 0) - 0.035 * k + 0.05 * k * Math.abs(s), 0];
+  // pelvis twists with the legs, the chest counters it
+  pose.hips = [0, (defense ? 0.06 : 0.16) * k * s, 0.04 * k * c];
+  pose.spine = [(pose.spine?.[0] || 0.03) + 0.14 * k + 0.08 * sprint, -(defense ? 0.04 : 0.2) * k * s, 0];
+  pose.neck = [-0.08 * k - 0.05 * sprint, 0.1 * k * s, 0];
   if (!defense) {
-    pose.shoulderL = [0.55 * k * s + 0.05, 0, 0.12]; pose.shoulderR = [-0.55 * k * s + 0.05, 0, -0.12];
-    pose.elbowL = [-0.25 - 0.6 * k, 0, 0]; pose.elbowR = [-0.25 - 0.6 * k, 0, 0];
+    const swing = (0.5 + 0.35 * sprint) * k;
+    pose.shoulderL = [swing * s + 0.05, 0, 0.12 + 0.06 * k]; pose.shoulderR = [-swing * s + 0.05, 0, -0.12 - 0.06 * k];
+    pose.elbowL = [-0.3 - 0.75 * k - 0.4 * sprint - 0.2 * Math.max(0, s), 0, 0]; pose.elbowR = [-0.3 - 0.75 * k - 0.4 * sprint - 0.2 * Math.max(0, -s), 0, 0];
+    if (k < 0.08) {
+      // standing: breathe and shift weight instead of freezing
+      const br = Math.sin(time * 1.7 + p.id), sw = Math.sin(time * 0.6 + p.id * 2);
+      pose.spine[0] += 0.015 * br; pose.hips = [0, 0, 0.035 * sw];
+      pose.hipL[2] += 0.02 * sw; pose.hipR[2] += 0.02 * sw;
+      pose.kneeL[0] += 0.08 * Math.max(0, sw); pose.kneeR[0] += 0.08 * Math.max(0, -sw);
+      pose.neck = [0.04 * br, 0.15 * Math.sin(time * 0.35 + p.id), 0];
+    }
   } else {
     const ax = guard ? -0.8 : -0.45, az = guard ? 1.15 : 0.95;
     pose.shoulderL = [ax, 0, az + 0.08 * Math.sin(time * 5)]; pose.shoulderR = [ax, 0, -az - 0.08 * Math.sin(time * 5 + 1)];
   }
   if (hasBall) {
     const dk = 0.5 + 0.5 * k;
-    pose.spine = [pose.spine[0] + 0.1, 0, 0];
+    pose.spine = [pose.spine[0] + 0.1, pose.spine[1] * 0.5, 0];
     pose.shoulderR = [-0.35 - 0.2 * dk, 0, -0.32];
     pose.elbowR = [-0.55 - 0.2 * Math.sin(time * TAU * (2.2 + speed * 0.3)), 0, 0];
     pose.wristR = [-0.2, 0, 0];
-    pose.shoulderL = [-0.55, 0, 0.32]; pose.elbowL = [-1.15, -0.2, 0];
+    pose.shoulderL = [-0.55 + 0.25 * k * s, 0, 0.32]; pose.elbowL = [-1.15, -0.2, 0];
     if (p.hand === 'L') mirrorArms(pose);
   }
   return pose;
@@ -383,7 +401,10 @@ export class CourtView {
     this.jerseys = opts.jerseys;
     this.camMode = opts.camera || 'broadcast';
     this.camOverride = null;
+    this.shakeAmt = 0; this.fovKick = 0;
+    this.basePR = Math.min(window.devicePixelRatio || 1, (QUALITY[opts.quality] || QUALITY.medium).pixelRatio); this.curPR = this.basePR; this.ft = []; this.prT = 0;
     const q = this.q = QUALITY[opts.quality] || QUALITY.medium;
+    this.detail = DETAIL[opts.quality] || DETAIL.medium;
     const r = this.renderer = new THREE.WebGLRenderer({ antialias: !q.post, powerPreference: 'high-performance' });
     r.setPixelRatio(Math.min(window.devicePixelRatio || 1, q.pixelRatio));
     r.outputColorSpace = THREE.SRGBColorSpace;
@@ -435,7 +456,7 @@ export class CourtView {
     const awayJersey = this.jerseys?.[1] || ({ Black: 'White', White: 'Black', Volt: 'Purple', Red: 'Royal', Royal: 'Red', Navy: 'Gold', Purple: 'Volt', Gold: 'Navy', Teal: 'Orange', Orange: 'Teal' })[homeJersey] || 'White';
     const build = JSON.parse(JSON.stringify(p.build));
     build.look.jersey = p.team === 0 ? homeJersey : awayJersey;
-    const c = buildCharacter(build, null);
+    const c = buildCharacter(build, null, { detail: this.detail, lite: this.q === QUALITY.low });
     this.scene.add(c.root);
     const me = p.id === this.localId;
     const ringColor = me ? 0xe11d2e : p.team === this.local.team ? 0xf2f2f2 : 0x3ab0ff;
@@ -600,6 +621,15 @@ export class CourtView {
     }
     const sc = Math.max(0, Math.ceil(this.game.shotClock ?? 20));
     if (sc !== this._clockShown) { this._clockShown = sc; this.court.clock.draw(sc); }
+    // impact feel: decaying shake and a quick FOV punch
+    if (this.shakeAmt > 0.001) {
+      const t = performance.now() / 1000, m = this.shakeAmt;
+      this.camera.position.x += Math.sin(t * 61) * m * 0.12; this.camera.position.y += Math.sin(t * 73 + 1) * m * 0.09;
+      this.camera.rotation.z += Math.sin(t * 47) * m * 0.012;
+      this.shakeAmt *= Math.exp(-dt * 9);
+    }
+    if (this.fovKick > 0.01 && !this.camOverride) { this.camera.fov += this.fovKick; this.camera.updateProjectionMatrix(); this.fovKick *= Math.exp(-dt * 7); }
+    this.adaptResolution(dt);
     if (this.composer) this.composer.render(dt); else this.renderer.render(this.scene, this.camera);
   }
 
@@ -624,6 +654,21 @@ export class CourtView {
     this.renderer.forceContextLoss();
     this.renderer.domElement.remove();
     this.scene = null;
+  }
+
+  shake(amount = 1, fov = 0) { this.shakeAmt = Math.max(this.shakeAmt, amount); this.fovKick = Math.max(this.fovKick, fov); }
+
+  // keep the frame rate up: shed pixels when frames run long, take them back when there's headroom
+  adaptResolution(dt) {
+    if (!(dt > 0)) return;
+    this.ft.push(dt); if (this.ft.length > 45) this.ft.shift();
+    this.prT += dt;
+    if (this.prT < 1.5 || this.ft.length < 30) return;
+    const avg = this.ft.reduce((a, b) => a + b, 0) / this.ft.length;
+    let pr = this.curPR;
+    if (avg > 1 / 40) pr = Math.max(0.6, pr - 0.15);
+    else if (avg < 1 / 58 && pr < this.basePR) pr = Math.min(this.basePR, pr + 0.1);
+    if (pr !== this.curPR) { this.curPR = pr; this.renderer.setPixelRatio(pr); this.resize(); this.prT = 0; this.ft.length = 0; }
   }
 
   // trailer helper: dim or light each floodlight (0..1)

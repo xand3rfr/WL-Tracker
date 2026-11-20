@@ -40,7 +40,7 @@
     <!-- main -->
     <section class="scr" id="scr-main" data-title="Main Menu">
       <div class="hero">
-        <div class="hero-kicker">Season 1 · Night Run</div>
+        <div class="hero-kicker" id="heroKicker">Season 1</div>
         <h1 class="hero-title">Blacktop<br><span>Legends</span></h1>
       </div>
       <nav class="tiles" aria-label="Game modes">
@@ -179,10 +179,12 @@
         <div class="sb-mid"><span class="sb-clock" id="sClock">20</span><span class="sb-to" id="sTo">To 21</span></div>
         <div class="sb-team away"><span class="sb-pts" id="sThem">0</span><span class="sb-name" id="sbAway">Away</span></div>
         <span class="sb-poss" id="sPoss" aria-hidden="true"></span>
+        <span class="sb-shotbar" id="sShotBar" aria-hidden="true"></span>
       </div>
       <button class="icon-btn pause-btn" id="pauseBtn" title="Pause (Esc)" aria-label="Pause"><svg viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></svg></button>
       <div class="net-tag" id="netTag" hidden></div>
       <div class="banner" id="banner"></div>
+      <div class="replay-tag" id="replayTag"></div>
       <div class="clear-tag" id="clearTag">Clear the ball</div>
       <div class="meter" id="meter"><div class="meter-fill" id="meterFill"></div><div class="meter-green" id="meterGreen"></div></div>
       <div class="grade" id="grade"></div>
@@ -225,12 +227,23 @@
         <div class="ov-kicker" id="ovKicker">Final</div>
         <h2 class="ov-title" id="ovTitle">You Win</h2>
         <div class="ov-score" id="ovScore"></div>
+        <div class="pog" id="ovPog"></div>
         <div class="box" id="ovBox"></div>
         <div class="ov-actions" id="ovActions"></div>
       </div>
     </div>
   </section>
 
+  <div class="loader" id="loader" hidden>
+    <div class="ld-inner">
+      <div class="ld-kicker" id="ldKicker">Loading</div>
+      <div class="ld-title" id="ldTitle">Blacktop Run</div>
+      <div class="ld-bar"><div class="ld-fill" id="ldFill"></div></div>
+      <div class="ld-tip"><b>Tip</b><span id="ldTip"></span></div>
+    </div>
+    <svg class="ld-ball" viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="21" fill="none" stroke="currentColor" stroke-width="3"/><path d="M3 24h42M24 3v42M9 9c8 6 8 24 0 30M39 9c-8 6-8 24 0 30" fill="none" stroke="currentColor" stroke-width="2.5"/></svg>
+  </div>
+  <div class="wipe" id="wipe"></div>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
   <script type="module" src="/js/play.js"></script>
 </body>

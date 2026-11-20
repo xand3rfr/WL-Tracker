@@ -6,6 +6,7 @@ import { Input, Sfx } from './game/input.js';
 import { presetBuilds } from './game/presets.js';
 import { Net, createRoom } from './game/net.js';
 import { playTrailer } from './trailer.js';
+import { prepareCharacters, DETAIL } from './player3d.js';
 import * as THREE from '../vendor/three.module.min.js';
 
 const $ = (s, el = document) => el.querySelector(s);
@@ -24,7 +25,7 @@ const ARROW_L = '<svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>';
 const ARROW_R = '<svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg>';
 
 const COARSE = window.matchMedia('(pointer: coarse)').matches;
-const prefs = Object.assign({ sound: true, camera: 'broadcast', names: true, touch: 'auto', quality: COARSE ? 'low' : 'medium', ambience: true }, store.get('bl_prefs', {}));
+const prefs = Object.assign({ sound: true, camera: 'broadcast', names: true, touch: 'auto', quality: COARSE ? 'low' : 'medium', ambience: true, replays: true }, store.get('bl_prefs', {}));
 const setup = Object.assign({ mode: 3, target: 21, scoring: '23', difficulty: 'pro', pick: { kind: 'mine', id: 'current' } }, store.get('bl_play_v2', {}));
 const savePrefs = () => store.set('bl_prefs', prefs);
 let touchedOnce = false;
@@ -59,6 +60,7 @@ function pickedBuild() {
 }
 
 function renderProfile() {
+  $('#heroKicker').textContent = `Season 1 · Rep: ${repTier(store.get('bl_rep', 0)).name}`;
   const b = pickedBuild();
   $('#pfOvr').textContent = B.overall(b);
   $('#pfName').textContent = fullName(b);
@@ -199,6 +201,7 @@ ENTER.settings = () => {
     { key: 'names', label: 'Player Names', values: [[true, 'On'], [false, 'Off']], get: () => prefs.names, set: v => { prefs.names = v; savePrefs(); } },
     { key: 'quality', label: 'Graphics', values: [['low', 'Low'], ['medium', 'Medium'], ['high', 'High']], get: () => prefs.quality, set: v => { prefs.quality = v; savePrefs(); restartMenuScene(); } },
     { key: 'touch', label: 'Touch Controls', values: [['auto', 'Auto'], ['on', 'On'], ['off', 'Off']], get: () => prefs.touch, set: v => { prefs.touch = v; savePrefs(); applyTouch(); } },
+    { key: 'replays', label: 'Instant Replays', values: [[true, 'On'], [false, 'Off']], get: () => prefs.replays, set: v => { prefs.replays = v; savePrefs(); } },
     { key: 'ambience', label: 'Crowd Ambience', values: [[true, 'On'], [false, 'Off']], get: () => prefs.ambience, set: v => { prefs.ambience = v; savePrefs(); } },
     { key: 'trailer', label: 'Intro Trailer', display: () => 'Watch', action: () => playIntro() },
   ]);
@@ -309,14 +312,19 @@ function showMenus() { $('#game').hidden = true; $('#shell').hidden = false; sta
 function showGame() { $('#shell').hidden = true; $('#game').hidden = false; stopMenuScene(); }
 
 // ================= attract mode: a live AI game behind the menus =================
-function startMenuScene() {
+let menuToken = 0;
+async function startMenuScene() {
   if (attract || !$('#game').hidden) return;
+  const token = ++menuToken;
   const b = pickedBuild();
+  const quality = prefs.quality === 'high' ? 'medium' : prefs.quality;
   let game, view;
   try {
     game = new Game({ userBuild: B.clone(b), mode: 2, target: 999, difficulty: 'allstar' });
     game.user.isUser = false;
-    view = new CourtView($('#menuStage'), game, { quality: prefs.quality === 'high' ? 'medium' : prefs.quality });
+    await prepareCharacters(game.players.map(p => p.build), DETAIL[quality]);
+    if (token !== menuToken || attract || !$('#game').hidden) return;
+    view = new CourtView($('#menuStage'), game, { quality });
   } catch (err) { console.error(err); return; }
   view.chars.forEach(ch => { ch.ring.visible = false; if (ch.arrow) ch.arrow.visible = false; });
   $('#menuStage').classList.add('on');
@@ -342,6 +350,7 @@ function startMenuScene() {
   a.raf = requestAnimationFrame(loop);
 }
 function stopMenuScene() {
+  menuToken++;
   if (!attract) return;
   cancelAnimationFrame(attract.raf);
   attract.view.dispose();
@@ -357,20 +366,67 @@ async function playIntro() {
   startMenuScene();
 }
 
-function runGame({ game, localId, online, host, jerseys }) {
+// ---------- loading screen ----------
+const TIPS = [
+  'Release the shot in the white window. Defenders closing out shrink it.',
+  'Chain two different dribble moves quickly for a combo. It hits harder.',
+  'A step-back buys about a second of space for a clean jumper.',
+  'Hold G on defense to sit in a stance: quicker slides, tougher contests.',
+  'After a steal or a defensive board, clear the ball past the arc before you score.',
+  'Crossovers are easiest to pick. Spins are the safest move against a gambler.',
+  'Sprinting drains your energy bar. A tired player loses speed and shot touch.',
+  'Press F when a teammate has the ball to call for it.',
+];
+let tipTimer = 0;
+function showLoader(kicker, title) {
+  const el = $('#loader');
+  $('#ldKicker').textContent = kicker; $('#ldTitle').textContent = title; $('#ldFill').style.width = '4%';
+  let i = Math.floor(Math.random() * TIPS.length);
+  const tip = () => { $('#ldTip').textContent = TIPS[i++ % TIPS.length]; };
+  tip(); clearInterval(tipTimer); tipTimer = setInterval(tip, 3600);
+  el.hidden = false; requestAnimationFrame(() => el.classList.add('on'));
+}
+const setLoader = p => { $('#ldFill').style.width = Math.round(6 + p * 90) + '%'; };
+function hideLoader() {
+  const el = $('#loader');
+  $('#ldFill').style.width = '100%';
+  clearInterval(tipTimer);
+  el.classList.remove('on');
+  setTimeout(() => { el.hidden = true; }, 380);
+}
+function wipe() {
+  const w = $('#wipe');
+  w.className = 'wipe in';
+  return new Promise(res => setTimeout(() => { res(); setTimeout(() => { w.className = 'wipe out'; setTimeout(() => { w.className = 'wipe'; }, 420); }, 60); }, 330));
+}
+
+let runToken = 0;
+async function runGame({ game, localId, online, host, jerseys }) {
+  const token = ++runToken;
+  await wipe();
   stopGame();
+  stopMenuScene();
+  showLoader(online ? 'Blacktop Online' : `${game.mode}v${game.mode} · First to ${game.target}`, 'Lacing up');
+  try { await prepareCharacters(game.players.map(p => p.build), DETAIL[prefs.quality], setLoader); } catch (err) { console.error(err); }
+  if (token !== runToken) return;
   showGame();
   $('#over').hidden = true; $('#pause').hidden = true;
   let view;
   try {
     view = new CourtView($('#court'), game, { localId, jerseys, camera: prefs.camera, quality: prefs.quality });
+    // compile every shader now so the first possession doesn't stutter
+    view.renderer.compile(view.scene, view.camera);
+    view.update(0, performance.now() / 1000);
   } catch (err) {
     console.error(err);
+    hideLoader();
     toast('This game needs WebGL, which is not available in this browser.');
     showMenus();
     return;
   }
-  G = { game, view, localId, online, host, me: game.players[localId], snapT: 0, sendT: 0, outbox: [], lastSent: null, paused: false };
+  hideLoader();
+  G = { game, view, localId, online, host, me: game.players[localId], snapT: 0, sendT: 0, outbox: [], lastSent: null, paused: false,
+    timeScale: 1, slowT: 0, freeze: 0, rec: [], recTick: 0, replay: null, replayQ: null, lastReplay: -99, replica: null };
   let lastDrib = 0;
   view.onDribble = () => { const t = performance.now(); if (t - lastDrib > 180) { lastDrib = t; sfx.dribble(); } };
   if (!input) input = new Input($('#touch'));
@@ -387,7 +443,7 @@ function runGame({ game, localId, online, host, jerseys }) {
   $('#pauseNote').textContent = online ? 'Online games keep running while this menu is open.' : '';
   $('#tags').innerHTML = '';
   for (const k of Object.keys(remote)) delete remote[k];
-  window.__game = game; window.__view = view;
+  window.__game = game; window.__view = view; window.__dbg = { queueReplay, get G() { return G; } };
   if (prefs.ambience) sfx.startAmbience(0.16);
   if (online && host) ensureTicker();
   last = performance.now(); acc = 0; pending = null;
@@ -435,6 +491,8 @@ function onSnapshot(s) {
 function frame(now) {
   if (!G) return;
   const dt = tick(now);
+  if (G?.replay) stepReplay(dt);
+  if (!G) return;
   G.view.update(G.paused && !G.online ? 0 : dt, now / 1000);
   hud(now);
   requestAnimationFrame(frame);
@@ -460,15 +518,29 @@ function tick(now) {
     if (!G.paused || G.online) {
       const mine = G.paused ? { mx: 0, mz: 0, shoot: false, sprint: false } : inp;
       pending = pending ? { ...mine, shootPressed: pending.shootPressed || mine.shootPressed, passPressed: pending.passPressed || mine.passPressed, shootReleased: pending.shootReleased || mine.shootReleased, move: pending.move || mine.move } : mine;
-      acc += dt;
+      if (G.replay && (inp.shootPressed || inp.passPressed || inp.pausePressed)) endReplay();
+      let simDt = dt;
+      if (!G.online) {
+        if (G.replay) simDt = 0;
+        else if (G.freeze > 0) { G.freeze -= dt; simDt = 0; }
+        else simDt = dt * G.timeScale;
+        if (G.slowT > 0 && !G.replay) { G.slowT -= dt; if (G.slowT <= 0) G.timeScale = 1; }
+      }
+      acc += simDt;
       while (acc >= STEP) {
         const inputs = { [localKey]: pending, ...remote };
         g.step(STEP, inputs);
         pending = { ...pending, shootPressed: false, passPressed: false, shootReleased: false, move: null };
         for (const k of Object.keys(remote)) remote[k] = { ...remote[k], shootPressed: false, passPressed: false, shootReleased: false, move: null };
         acc -= STEP;
+        if (!G.online && prefs.replays && (G.recTick = (G.recTick + 1) % 2) === 0) {
+          G.rec.push({ s: g.snapshot(), e: [] });
+          if (G.rec.length > 240) G.rec.shift();
+        }
       }
       const evs = g.events.splice(0);
+      if (G.rec.length && evs.length) G.rec[G.rec.length - 1].e.push(...evs);
+      if (G.replayQ && !G.replay) maybeStartReplay();
       if (G.online) G.outbox.push(...evs);
       handleEvents(evs);
       if (G.online) {
@@ -497,6 +569,71 @@ function setPaused(p) {
   $('#pause').hidden = !p;
 }
 
+// ---------- instant replays (offline) ----------
+function queueReplay(focus, label, force = false) {
+  if (!G || G.online || !prefs.replays || G.replay) return;
+  const g = G.game;
+  if (!force && g.time - G.lastReplay < 14) return;
+  if (G.replayQ && !force) return;
+  G.replayQ = { focus, label, at: g.time, until: g.time + 1.1 };
+}
+function maybeStartReplay() {
+  const g = G.game, q = G.replayQ;
+  if (g.time < q.until) return;
+  const dead = g.phase !== 'live';
+  if (!dead) { if (g.time - q.at > 6) G.replayQ = null; return; }
+  G.replayQ = null;
+  const frames = G.rec.filter(f => f.s.T >= q.at - 2.6 && f.s.T <= q.until);
+  if (frames.length < 20) return;
+  if (!G.replica) G.replica = new Game({ mode: g.mode, target: g.target, scoring: g.scoring, roster: g.players.map(p => ({ team: p.team, build: p.build, human: p.ctrl })) });
+  G.replay = { frames, i: 0, focus: q.focus, label: q.label, fired: -1 };
+  G.lastReplay = g.time;
+  G.view.game = G.replica;
+  G.view.chars.forEach(ch => { ch.ring.visible = false; if (ch.arrow) ch.arrow.visible = false; });
+  $('#game').classList.add('replaying');
+  $('#replayTag').innerHTML = `<b>Replay</b><span>${esc(q.label)}</span><small>E / F to skip</small>`;
+}
+function stepReplay(dt) {
+  const r = G.replay, rep = G.replica, view = G.view;
+  r.i += dt * 30 * 0.5;
+  const n = r.frames.length;
+  if (r.i >= n - 1) { endReplay(); return; }
+  const k = Math.floor(r.i), f = r.i - k;
+  const A = r.frames[k], Bf = r.frames[k + 1];
+  rep.applySnapshot(A.s, true);
+  // ease between the 30 Hz samples so slow motion stays smooth
+  rep.players.forEach((p, i) => {
+    const b = Bf.s.p[i]; if (!b) return;
+    p.x += (b[0] - p.x) * f; p.z += (b[1] - p.z) * f; p.y += (b[2] - p.y) * f; p.st += (b[7] - p.st) * f;
+    let df = b[5] - p.facing; df = Math.atan2(Math.sin(df), Math.cos(df)); p.facing += df * f;
+  });
+  const bb = Bf.s.b, ball = rep.ball;
+  if (bb[0] === ball.state) { ball.x += (bb[2] - ball.x) * f; ball.y += (bb[3] - ball.y) * f; ball.z += (bb[4] - ball.z) * f; }
+  for (let j = r.fired + 1; j <= k; j++) for (const e of r.frames[j].e) {
+    if (e.type === 'make') { view.netKick = 1; if (e.kind === 'dunk') { sfx.dunk(); view.shake(0.9, 0); } else sfx.swish(); sfx.cheer(); }
+    if (e.type === 'rim') sfx.rim();
+    if (e.type === 'block') { sfx.block(); view.shake(0.6); }
+    if (e.type === 'ankles') sfx.ooh();
+    if (e.type === 'dmove') sfx.squeak();
+  }
+  r.fired = k;
+  const p = rep.players[r.focus] || rep.players[0];
+  const a = 0.6 + r.i * 0.012;
+  const bp = view.ball.position;
+  view.camOverride = {
+    pos: new THREE.Vector3(p.x + Math.sin(a) * 3.6, 1.15 + p.y * 0.6, p.z + Math.cos(a) * 3.6),
+    look: new THREE.Vector3(p.x + (bp.x - p.x) * 0.35, 1.2 + p.y * 0.8, p.z + (bp.z - p.z) * 0.35), fov: 40,
+  };
+}
+function endReplay() {
+  if (!G?.replay) return;
+  G.replay = null;
+  G.view.game = G.game;
+  G.view.camOverride = null;
+  G.view.chars.forEach(ch => { ch.ring.visible = true; if (ch.arrow) ch.arrow.visible = true; });
+  $('#game').classList.remove('replaying');
+}
+
 // ---------- feedback ----------
 let bannerTimer = 0;
 function banner(text, sub = '', bad = false) {
@@ -517,6 +654,8 @@ function handleEvents(events) {
   for (const e of events) {
     switch (e.type) {
       case 'make': {
+        if (e.kind === 'dunk') { G.view.shake(1.1, 3); if (!G.online) G.freeze = 0.085; queueReplay(e.id, 'Slam'); }
+        if (g.winner != null) { if (!G.online) { G.timeScale = 0.3; G.slowT = 1.1; } queueReplay(e.id, 'Game Winner', true); }
         if (e.kind === 'dunk') sfx.dunk(); else sfx.swish();
         G.view.netKick = 1;
         const kind = e.kind === 'dunk' ? 'Slam!' : e.kind === 'three' ? 'Splash!' : e.kind === 'layup' ? 'And Finish' : 'Bucket';
@@ -528,7 +667,8 @@ function handleEvents(events) {
       case 'release':
         if (e.id === G.localId && e.grade) { showGrade(e.grade); if (e.grade === 'Excellent') sfx.green(); }
         break;
-      case 'block': sfx.block(); banner(mine(g.players[e.id].team) ? 'Rejected!' : 'Blocked', pname(e.id), !mine(g.players[e.id].team)); break;
+      case 'block': G.view.shake(0.8); if (!G.online) G.freeze = 0.07; if (e.id === G.localId || e.shooter === G.localId) queueReplay(e.id, 'Rejected');
+        sfx.block(); banner(mine(g.players[e.id].team) ? 'Rejected!' : 'Blocked', pname(e.id), !mine(g.players[e.id].team)); break;
       case 'steal': sfx.steal(); banner(mine(g.players[e.id].team) ? 'Steal!' : 'Stolen', pname(e.id), !mine(g.players[e.id].team)); break;
       case 'turnover': sfx.whistle(); banner(e.reason, 'Turnover', mine(e.team)); break;
       case 'noClear': sfx.whistle(); banner("Didn't Clear", 'No basket', mine(e.team)); break;
@@ -536,7 +676,8 @@ function handleEvents(events) {
       case 'rim': sfx.rim(); break;
       case 'bounce': if (e.v > 2) sfx.dribble(); break;
       case 'dmove': sfx.squeak(); if (e.id === G.localId && e.combo) showGrade('Combo'); break;
-      case 'ankles': sfx.ooh(); banner('Ankles Broken!', `${pname(e.by)} on ${pname(e.id)}`, !mine(g.players[e.by].team)); break;
+      case 'ankles': G.view.shake(0.45); queueReplay(e.by, 'Ankles');
+        sfx.ooh(); banner('Ankles Broken!', `${pname(e.by)} on ${pname(e.id)}`, !mine(g.players[e.by].team)); break;
       case 'shook': if (e.by === G.localId) showGrade('Shook!'); break;
       case 'check': setTimeout(() => G && banner(e.team === myTeam ? 'Your Ball' : 'Their Ball', 'Check'), 50); break;
       case 'gameover': setTimeout(showOver, 900); break;
@@ -567,6 +708,7 @@ function hud(now) {
   const clock = $('#sClock');
   clock.textContent = Math.max(0, Math.ceil(g.shotClock));
   clock.classList.toggle('low', g.shotClock < 5);
+  $('#sShotBar').style.transform = `scaleX(${clamp(g.shotClock / 20, 0, 1)})`;
   $('#sPoss').classList.toggle('away', g.poss === 1);
   $('#clearTag').classList.toggle('show', g.phase === 'live' && g.needsClear && g.poss === u.team);
   const e = $('#energy'); e.style.width = u.energy * 100 + '%'; e.classList.toggle('low', u.energy < 0.25);
@@ -634,14 +776,33 @@ function showOver() {
     return `<tr class="${p.id === G.localId ? 'you' : ''}${p.isUser ? ' human' : ''}${sep ? ' sep' : ''}"><td>${esc(p.name)}</td><td>${s.pts}</td><td>${s.reb}</td><td>${s.ast}</td><td>${s.stl}</td><td>${s.blk}</td><td>${s.fgm}-${s.fga}</td><td>${s.tpm}-${s.tpa}</td><td>${s.to}</td></tr>`;
   };
   const home = g.team(0), away = g.team(1);
+  const grade = letterGrade(me, g.target);
+  // player of the game + rep earned
+  const score = p => p.stats.pts + 1.1 * p.stats.reb + 1.5 * p.stats.ast + 2 * p.stats.stl + 2 * p.stats.blk - p.stats.to;
+  const pog = [...g.players].sort((a, b) => score(b) - score(a))[0];
+  const ps = pog.stats;
+  const gained = Math.round((won ? 120 : 60) + ({ 'A+': 90, A: 75, 'A-': 60, 'B+': 45, B: 35, 'B-': 25, 'C+': 15, C: 10 }[grade] || 0) * (g.target / 21) + 20);
+  const before = store.get('bl_rep', 0), after = before + gained;
+  store.set('bl_rep', after);
+  const tb = repTier(before), ta = repTier(after);
+  const repHTML = `<div class="rep"><div class="rep-top"><span>Rep</span><b>+${gained}</b><em>${esc(ta.name)}${ta.name !== tb.name ? ' · Rank up!' : ''}</em></div><div class="rep-bar"><i style="width:${Math.round(ta.frac * 100)}%"></i></div></div>`;
+  $('#ovPog').innerHTML = `<div class="pog-k">Player of the Game</div><div class="pog-n">${esc(pog.name)}</div><div class="pog-s">${ps.pts} PTS · ${ps.reb} REB · ${ps.ast} AST${ps.stl ? ` · ${ps.stl} STL` : ''}${ps.blk ? ` · ${ps.blk} BLK` : ''}</div>`;
+  $('#ovPog').classList.toggle('mine', pog.team === me.team);
   $('#ovBox').innerHTML = `<table><thead><tr><th>Player</th><th>Pts</th><th>Reb</th><th>Ast</th><th>Stl</th><th>Blk</th><th>FG</th><th>3P</th><th>TO</th></tr></thead>
     <tbody>${home.map((p, i) => row(p, i === home.length - 1)).join('')}${away.map(p => row(p, false)).join('')}</tbody></table>
-    <div class="grade-big">Your Grade <b>${letterGrade(me, g.target)}</b></div>`;
+    <div class="grade-big">Your Grade <b>${grade}</b></div>${repHTML}`;
   $('#ovActions').innerHTML = G.online
     ? (G.host ? '<button class="btn primary" data-ov="lobby">Back to Lobby</button><button class="btn" data-ov="quit">Leave Room</button>'
       : '<button class="btn" disabled>Waiting for host…</button><button class="btn" data-ov="quit">Leave Room</button>')
     : '<button class="btn primary" data-ov="again">Run It Back</button><button class="btn" data-ov="setup">New Game</button><button class="btn" data-ov="main">Main Menu</button>';
   $('#over').hidden = false;
+}
+
+const TIERS = ['Rookie', 'Starter', 'Pro', 'All-Star', 'Superstar', 'Legend'];
+function repTier(rep) {
+  const per = 600, lvl = Math.floor(rep / per), t = Math.min(TIERS.length - 1, Math.floor(lvl / 3));
+  const sub = t === TIERS.length - 1 ? '' : ' ' + ['I', 'II', 'III'][lvl % 3];
+  return { name: TIERS[t] + sub, frac: (rep % per) / per };
 }
 
 // ---------- misc ----------

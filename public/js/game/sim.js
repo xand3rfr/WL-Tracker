@@ -998,7 +998,7 @@ export class Game {
     return snap;
   }
 
-  applySnapshot(s) {
+  applySnapshot(s, exact = false) {
     this.time = s.T; this.phase = s.ph; this.phaseT = s.pT; this.score = s.sc; this.poss = s.po; this.shotClock = s.cl; this.needsClear = s.nc; this.winner = s.w;
     s.p.forEach((a, i) => {
       const p = this.players[i];
@@ -1007,7 +1007,7 @@ export class Game {
       p.hand = hand || 'R'; p.guarding = !!guarding; p.stumble = stumble || 0; p.fallen = !!fallen;
       p.dm = dm ? { k: dm.k, d: dm.d, side: dm.s, from: dm.f } : null;
       // small corrections blend, big ones snap
-      const blend = hyp(p.x - x, p.z - z) < 0.8 ? 0.5 : 1;
+      const blend = exact || hyp(p.x - x, p.z - z) >= 0.8 ? 1 : 0.5;
       p.x += (x - p.x) * blend; p.z += (z - p.z) * blend;
       p.y = y; p.vx = vx; p.vz = vz; p.facing = f; p.energy = energy; p.gait = gait; p.stats = stats;
       p.isUser = !!human;

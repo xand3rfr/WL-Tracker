@@ -90,6 +90,7 @@ test('dribble move keys trigger moves, switch hands and can shake defenders', as
   }
   // a guarding defender is harder to beat than a flat-footed one
   u.build.attrs.ballHandle = 62; u.build.badges = {};
+  const dq = g.players.find(p => p.team === 1); Object.assign(dq.build.attrs, { perimeterDefense: 60, agility: 60 }); dq.build.badges = {};
   let shakenFlat = 0, shakenGuard = 0;
   for (let i = 0; i < 400; i++) {
     for (const guarding of [false, true]) {

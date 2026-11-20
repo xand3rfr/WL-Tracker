@@ -4,6 +4,7 @@ import { CourtView } from './game/view.js';
 import { Sfx } from './game/input.js';
 import { presetBuilds } from './game/presets.js';
 import { clone } from './build.js';
+import { prepareCharacters, DETAIL } from './player3d.js';
 
 const CSS = `
 .tr { position: fixed; inset: 0; z-index: 1000; background: #000; color: #fff; overflow: hidden; font-family: 'Barlow Condensed', 'Arial Narrow', Impact, sans-serif; cursor: default; }
@@ -115,19 +116,23 @@ export function playTrailer({ quality = 'medium', requireStart = true } = {}) {
       { team: 0, build: star, human: 'star' }, { team: 0, build: clone(presetBuilds()[3]), human: 'm1' },
       { team: 1, build: def, human: 'd1' }, { team: 1, build: clone(presetBuilds()[4]), human: 'd2' },
     ];
-    let game, view;
-    try {
-      game = new Game({ mode: 2, target: 999, roster, firstPoss: 0 });
-      view = new CourtView($('.tr-stage'), game, { localId: 0, jerseys: ['Red', 'Black'], quality });
-    } catch { finish(); return; }
-    // the arrow and rings are gameplay HUD; hide them for the film
-    view.chars.forEach(ch => { ch.ring.visible = false; if (ch.arrow) ch.arrow.visible = false; });
+    const game = new Game({ mode: 2, target: 999, roster, firstPoss: 0 });
+    let view = null, ready = false, wantBegin = !requireStart;
     game.phase = 'live';
     const [S, M, D1, D2] = game.players;
     const place = (p, x, z, f) => Object.assign(p, { x, z, vx: 0, vz: 0, facing: f, state: 'move', st: 0 });
     place(S, 0.4, 9.4, Math.PI); place(D1, 0.3, 7.8, 0); place(M, -6.4, 3, Math.PI); place(D2, -5.8, 2.2, 0);
     game.giveBall(S);
-    view.setLamps(0);
+    // sculpt the cast in the background while the title card is up
+    prepareCharacters(roster.map(r => r.build), DETAIL[quality] || DETAIL.medium).then(() => {
+      if (done) return;
+      try { view = new CourtView($('.tr-stage'), game, { localId: 0, jerseys: ['Red', 'Black'], quality }); } catch { finish(); return; }
+      // the arrow and rings are gameplay HUD; hide them for the film
+      view.chars.forEach(ch => { ch.ring.visible = false; if (ch.arrow) ch.arrow.visible = false; });
+      view.setLamps(0);
+      ready = true;
+      if (wantBegin) begin();
+    });
 
     let t = 0, last = 0, running = false, done = false, raf = 0, scale = 1;
     const fired = new Set();
@@ -216,13 +221,16 @@ export function playTrailer({ quality = 'medium', requireStart = true } = {}) {
         // keep the extras out of the way
         for (const p of [M, D2]) { p.x = p.team ? 6.5 : -6.8; p.z = 3; p.vx = p.vz = 0; }
       }
-      view.camOverride = camera();
-      view.update(dt * (running ? scale : 0.3), now / 1000);
+      if (view) {
+        view.camOverride = camera();
+        view.update(dt * (running ? scale : 0.3), now / 1000);
+      }
       raf = requestAnimationFrame(frame);
     }
 
     function begin() {
       if (running || done) return;
+      if (!ready) { wantBegin = true; const pr = $('.tr-press'); if (pr) pr.textContent = 'Loading'; return; }
       sfx.ensure();
       running = true;
       const title = $('.tr-title');
